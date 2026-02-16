@@ -1,4 +1,4 @@
-FROM node:18-alpine
+FROM node:20-alpine
 
 # Install dependencies for Baileys (if needed for some architectures, optional but good for safety)
 # RUN apk add --no-cache git python3 make g++
