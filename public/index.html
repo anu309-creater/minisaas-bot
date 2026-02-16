@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Business AI Bot Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>Business AI Bot Setup</h1>
+        
+        <div class="card">
+            <h2>1. Business Details</h2>
+            <div class="form-group">
+                <label>Business Name</label>
+                <input type="text" id="businessName" placeholder="e.g. Pizza Paradise">
+            </div>
+            <div class="form-group">
+                <label>Gemini API Key</label>
+                <input type="password" id="apiKey" placeholder="AI Studio Key">
+            </div>
+            <div class="form-group">
+                <label>Business Context (The Brain)</label>
+                <textarea id="context" rows="6" placeholder="Describe your business, menu, opening hours, etc."></textarea>
+            </div>
+            <button onclick="saveSettings()">Save Settings</button>
+            <p id="saveStatus"></p>
+        </div>
+
+        <div class="card">
+            <h2>2. Connect WhatsApp</h2>
+            <div id="qr-container">
+                <p>Waiting for QR Code...</p>
+            </div>
+            <p id="connection-status" class="status">Disconnected</p>
+        </div>
+
+        <div class="card">
+            <h2>Logs</h2>
+            <div id="logs" class="logs-box"></div>
+        </div>
+    </div>
+    <script src="client.js"></script>
+</body>
+</html>

@@ -1,0 +1,90 @@
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #f0f2f5;
+    margin: 0;
+    padding: 20px;
+    display: flex;
+    justify-content: center;
+}
+
+.container {
+    max-width: 800px;
+    width: 100%;
+}
+
+h1 {
+    text-align: center;
+    color: #333;
+}
+
+.card {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    margin-bottom: 20px;
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+input, textarea {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    box-sizing: border-box; 
+    font-family: inherit;
+}
+
+button {
+    background-color: #008069;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+}
+
+button:hover {
+    background-color: #006b58;
+}
+
+#qr-container {
+    text-align: center;
+    min-height: 264px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: #fafafa;
+    border: 2px dashed #ccc;
+    margin-top: 10px;
+}
+
+#qr-container img {
+    max-width: 250px;
+}
+
+.status {
+    text-align: center;
+    font-weight: bold;
+    margin-top: 10px;
+}
+
+.logs-box {
+    background: #000;
+    color: #0f0;
+    padding: 10px;
+    height: 150px;
+    overflow-y: auto;
+    font-family: monospace;
+    font-size: 12px;
+}
