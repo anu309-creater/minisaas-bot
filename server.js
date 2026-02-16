@@ -24,7 +24,14 @@ let settings = {
 
 // Load settings if exists
 if (fs.existsSync('settings.json')) {
-    settings = JSON.parse(fs.readFileSync('settings.json'));
+    try {
+        const data = fs.readFileSync('settings.json', 'utf8');
+        if (data.trim()) {
+            settings = JSON.parse(data);
+        }
+    } catch (err) {
+        console.error('Error reading settings.json:', err);
+    }
 }
 
 let sock;

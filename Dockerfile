@@ -16,7 +16,7 @@ COPY . .
 
 # Create volume directories for persistence
 RUN mkdir -p auth_info && chown -R node:node auth_info
-RUN touch settings.json && chown node:node settings.json
+RUN echo "{}" > settings.json && chown node:node settings.json
 
 # Switch to non-root user for security
 USER node
