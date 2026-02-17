@@ -55,7 +55,13 @@ app.post('/settings', (req, res) => {
 
 // Clear auth_info on startup to force fresh session
 if (fs.existsSync('auth_info')) {
-    fs.rmSync('auth_info', { recursive: true, force: true });
+    try {
+        fs.rmSync('auth_info', { recursive: true, force: true });
+        console.log('Cleared auth_info session cache.');
+    } catch (err) {
+        console.error('Failed to clear auth_info (Permission Error?):', err.message);
+        // Continue anyway, maybe the existing session is fine or we can overwrite files inside
+    }
 }
 
 async function connectToWhatsApp() {
