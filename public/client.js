@@ -12,9 +12,26 @@ socket.on('connect', () => {
 });
 
 // QR Code
-socket.on('qr', (qrImage) => {
-    qrContainer.innerHTML = `<img src="${qrImage}" alt="Scan me">`;
-    statusEl.innerText = "Scan QR Code quickly!";
+// QR Code
+socket.on('qr', (qrCode) => {
+    log('Received QR Code sequence');
+    qrContainer.innerHTML = ""; // Clear previous
+
+    // Create new QR
+    try {
+        new QRCode(qrContainer, {
+            text: qrCode,
+            width: 256,
+            height: 256,
+            colorDark: "#000000",
+            colorLight: "#ffffff",
+            correctLevel: QRCode.CorrectLevel.H
+        });
+        statusEl.innerText = "Scan QR Code quickly!";
+    } catch (e) {
+        log('Error rendering QR: ' + e.message);
+        qrContainer.innerText = "Error rendering QR Code";
+    }
 });
 
 // Status
