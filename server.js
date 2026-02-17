@@ -53,12 +53,59 @@ app.post('/settings', (req, res) => {
     res.json({ message: 'Settings saved! AI is ready.' });
 });
 
-// Clear auth_info on startup to force fresh session
-if (fs.existsSync('auth_info')) {
-    try {
-        fs.rmSync('auth_info', { recursive: true, force: true });
-        console.log('Cleared auth_info session cache.');
-    } catch (err) {
+async function connectToWhatsApp() {
+    console.log('Initializing Baileys...');
+    io.emit('status', 'Initializing Baileys...');
+
+    // Use v2 session to ensure fresh start
+    const { state, saveCreds } = await useMultiFileAuthState('auth_session_v2');
+    io.emit('status', 'Auth Loaded. Creating Socket...');
+
+    sock = makeWASocket({
+        auth: state,
+        printQRInTerminal: false,
+        logger: pino({ level: 'info' }),
+        browser: ['Ubuntu', 'Chrome', '20.0.04'],
+        connectTimeoutMs: 60000,
+        syncFullHistory: false
+    });
+
+    sock.ev.on('connection.update', async (update) => {
+        const { connection, lastDisconnect, qr } = update;
+
+        if (qr) {
+            console.log('QR Code generated');
+            io.emit('qr', qr);
+            io.emit('status', 'QR Generated. Please Scan.');
+            // Also send as image data url for fallback
+            qrcode.toDataURL(qr, (err, url) => {
+                io.emit('qr_url', url); // extra event if needed, but client listens to 'qr' usually
+            });
+        }
+
+        if (connection === 'close') {
+            const shouldReconnect = (lastDisconnect.error)?.output?.statusCode !== DisconnectReason.loggedOut;
+            const errorReason = (lastDisconnect.error)?.output?.payload?.message || lastDisconnect.error?.message || "Unknown Error";
+
+            console.log('Connection closed:', errorReason);
+            io.emit('status', `Disconnected: ${errorReason}`);
+
+            if (shouldReconnect) {
+                console.log('Reconnecting in 5s...');
+                io.emit('status', `Reconnecting in 5s due to: ${errorReason}`);
+                setTimeout(connectToWhatsApp, 5000);
+            }
+        } else if (connection === 'open') {
+            console.log('Opened connection to WhatsApp!');
+            io.emit('status', 'Connected ✅');
+        } else if (connection === 'connecting') {
+            io.emit('status', 'Connecting to WhatsApp...');
+        }
+    });
+
+    sock.ev.on('creds.update', saveCreds);
+
+    sock.ev.on('messages.upsert', async ({ messages, type }) => {
         console.log(`Received Message Event: Type=${type}, Count=${messages.length}`);
 
         for (const msg of messages) {
@@ -135,9 +182,9 @@ async function getAIReply(userMsg) {
 io.on('connection', (socket) => {
     console.log('Client connected to dashboard');
     if (sock && sock.user) {
-        socket.emit('status', 'Connected');
+        socket.emit('status', 'Connected ✅');
     } else {
-        socket.emit('status', 'Disconnected/Waiting');
+        socket.emit('status', 'Waiting for Server...');
     }
 });
 
