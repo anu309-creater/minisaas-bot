@@ -65,7 +65,7 @@ if (fs.existsSync('auth_info')) {
 }
 
 async function connectToWhatsApp() {
-    const { state, saveCreds } = await useMultiFileAuthState('auth_info');
+    const { state, saveCreds } = await useMultiFileAuthState('auth_session_v2');
 
     sock = makeWASocket({
         auth: state,
