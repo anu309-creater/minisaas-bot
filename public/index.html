@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WhatsApp Bot v3.0</title>
+    <title>WhatsApp Bot v3.4</title>
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
@@ -78,31 +78,105 @@
             font-size: 0.8rem;
             color: #888;
         }
+
+        #logs {
+            display: none;
+            margin-top: 20px;
+            font-size: 10px;
+            color: #666;
+            text-align: left;
+            max-height: 100px;
+            overflow-y: auto;
+            background: #eee;
+            padding: 5px;
+        }
     </style>
 </head>
 
 <body>
 
     <div class="container">
-        <h1>Bot Setup v3.0</h1>
+        <h1>Bot Setup v3.4</h1>
         <div id="status" class="status">Connecting...</div>
 
         <div id="setup-form">
             <input type="text" id="businessName" placeholder="Business Name">
             <input type="password" id="apiKey" placeholder="Gemini API Key">
+            <textarea id="context" rows="3" placeholder="Business Context (Menu, Hours...)"></textarea>
+            <button onclick="saveSettings()">Save Settings</button>
+            <p id="saveMsg" style="font-size: 0.9rem; color: green;"></p>
+        </div>
+
+        <div id="qr-container">Waiting for QR...</div>
+
+        <div id="logs">
+            <div>> Initializing Logs...</div>
+        </div>
+
+        <div class="footer">Stable Release • Auto-Logs</div>
+    </div>
+
+    <script>
+        const socket = io();
+        const statusEl = document.getElementById('status');
+        const qrContainer = document.getElementById('qr-container');
+        const saveMsg = document.getElementById('saveMsg');
+        const logsEl = document.getElementById('logs');
+
+        // Socket: Status Update
+        socket.on('status', (msg) => {
+            statusEl.innerText = msg;
+
+            // Auto-show logs on error
+            if (msg.includes("Reconnecting") || msg.includes("Disconnected") || msg.toLowerCase().includes("error")) {
+                statusEl.style.color = "red";
+                logsEl.style.display = 'block';
+            } else if (msg.includes("Connected")) {
+                statusEl.style.color = "green";
+                qrContainer.innerHTML = "<h3>✅ Linked</h3>";
+                logsEl.style.display = 'none';
+            } else {
+                statusEl.style.color = "#007bff";
+            }
+        });
+
+        // Socket: QR Code
+        socket.on('qr', (qr) => {
+            if (!qr) return;
+            qrContainer.innerHTML = "";
+            new QRCode(qrContainer, {
+                text: qr,
+                width: 256,
+                height: 256
+            });
+        });
+
+        // Socket: Logs
+        socket.on('log', (msg) => {
+            const div = document.createElement('div');
+            div.innerText = `> ${msg}`;
+            logsEl.prepend(div);
+        });
+
+        // API: Save Settings
+        async function saveSettings() {
+            const businessName = document.getElementById('businessName').value;
+            const apiKey = document.getElementById('apiKey').value;
+            const context = document.getElementById('context').value;
+
             if (!businessName || !apiKey) return alert("Enter Name & API Key");
 
             const res = await fetch('/settings', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ businessName, apiKey, context })
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ businessName, apiKey, context })
             });
 
             const data = await res.json();
             saveMsg.innerText = data.message;
             setTimeout(() => saveMsg.innerText = "", 2000);
-            }
-            </script>
+        }
+    </script>
 
 </body>
 
