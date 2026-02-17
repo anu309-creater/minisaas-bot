@@ -84,47 +84,18 @@ async function startWhatsApp() {
             io.emit('status', 'Connected ✅');
             io.emit('qr', ''); // Clear QR
         }
-    });
-
-    sock.ev.on('creds.update', saveCreds);
-
-    // AI Logic
-    sock.ev.on('messages.upsert', async ({ messages, type }) => {
-        if (type !== 'notify') return;
-        for (const msg of messages) {
-            if (!msg.message || msg.key.fromMe) continue;
-
-            const text = msg.message.conversation || msg.message.extendedTextMessage?.text;
-            if (!text) continue;
-
-            if (settings.apiKey) {
-                try {
-                    const genAI = new GoogleGenerativeAI(settings.apiKey);
-                    // Use gemini-pro as stable model
-                    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
-                    const result = await model.generateContent(`Act as a support agent for ${settings.businessName}. user: ${text}`);
-                    await sock.sendMessage(msg.key.remoteJid, { text: result.response.text() });
-                } catch (e) {
-                    console.error('AI Error:', e.message);
-                }
+        io.on('connection', (socket) => {
+            socket.emit('log', 'Client Connected');
+            if (fs.existsSync('settings.json')) {
+                try { settings = JSON.parse(fs.readFileSync('settings.json')); } catch (e) { }
             }
-        }
-    });
-}
+        });
 
-// --- INIT ---
-io.on('connection', (socket) => {
-    socket.emit('log', 'Client Connected');
-    if (fs.existsSync('settings.json')) {
-        try { settings = JSON.parse(fs.readFileSync('settings.json')); } catch (e) { }
-    }
-});
-
-server.listen(PORT, () => {
-    console.log(`Server v4.1 running on ${PORT}`);
-    // Wipe on restart for fresh pairing
-    if (fs.existsSync('auth_info_v4')) {
-        try { fs.rmSync('auth_info_v4', { recursive: true, force: true }); } catch (e) { }
-    }
-    startWhatsApp();
-});
+        server.listen(PORT, () => {
+            console.log(`Server v4.1 running on ${PORT}`);
+            // Wipe on restart for fresh pairing
+            if (fs.existsSync('auth_info_v4')) {
+                try { fs.rmSync('auth_info_v4', { recursive: true, force: true }); } catch (e) { }
+            }
+            startWhatsApp();
+        });
