@@ -13,6 +13,25 @@ const io = new Server(server);
 
 const PORT = process.env.PORT || 3000;
 
+// Override console.log to send logs to frontend
+const originalLog = console.log;
+console.log = function (...args) {
+    originalLog.apply(console, args);
+    if (io) {
+        const msg = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ');
+        io.emit('log', msg);
+    }
+};
+
+const originalError = console.error;
+console.error = function (...args) {
+    originalError.apply(console, args);
+    if (io) {
+        const msg = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ');
+        io.emit('log', `ERROR: ${msg}`);
+    }
+};
+
 // Prevent crash on unhandled errors
 process.on('uncaughtException', (err) => {
     console.error('UNCAUGHT EXCEPTION:', err);
@@ -76,8 +95,10 @@ if (fs.existsSync('auth_info')) {
 async function connectToWhatsApp() {
     updateStatus('Initializing Baileys...');
 
-    // Use v2 session to ensure fresh start
-    const { state, saveCreds } = await useMultiFileAuthState('auth_session_v2');
+    // Use v3 session to ensure fresh start
+    console.log('Loading Auth Session v3...');
+    const { state, saveCreds } = await useMultiFileAuthState('auth_session_v3');
+    console.log('Auth Loaded Successfully.');
     updateStatus('Auth Loaded. Creating Socket...');
 
     sock = makeWASocket({
