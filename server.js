@@ -13,7 +13,8 @@ const io = new Server(server);
 
 const PORT = process.env.PORT || 3000;
 
-// Override console.log to send logs to frontend
+// --- 1. LOGGING & DEBUGGING MIDDLEWARE ---
+// Override console.log/error to emit events to the frontend
 const originalLog = console.log;
 console.log = function (...args) {
     originalLog.apply(console, args);
@@ -32,14 +33,15 @@ console.error = function (...args) {
     }
 };
 
-// Prevent crash on unhandled errors
+// Prevent silent crashes
 process.on('uncaughtException', (err) => {
-    console.error('UNCAUGHT EXCEPTION:', err);
+    console.error('CRITICAL UNCAUGHT EXCEPTION:', err);
 });
 process.on('unhandledRejection', (reason, promise) => {
-    console.error('UNHANDLED REJECTION:', reason);
+    console.error('CRITICAL UNHANDLED REJECTION:', reason);
 });
 
+// --- 2. CONFIGURATION & STATE ---
 app.use(express.static('public'));
 app.use(express.json());
 
@@ -48,197 +50,166 @@ let settings = {
     apiKey: "",
     context: "I am a helpful assistant."
 };
-
-// State persistence for dashboard
-let lastStatus = "Waiting for Server...";
+let lastStatus = "Starting System...";
 let lastQR = "";
 
+// Helper to update status
 function updateStatus(msg) {
     lastStatus = msg;
     io.emit('status', msg);
-    console.log('Status Update:', msg);
+    console.log(`STATUS: ${msg}`);
 }
 
-// Load settings if exists
+// Load settings
 if (fs.existsSync('settings.json')) {
     try {
         const data = fs.readFileSync('settings.json', 'utf8');
-        if (data.trim()) {
-            settings = JSON.parse(data);
-        }
+        if (data.trim()) settings = JSON.parse(data);
     } catch (err) {
-        console.error('Error reading settings.json:', err);
+        console.error('Error reading settings.json:', err.message);
     }
 }
 
-let sock;
-
-// API to save settings
+// API Routes
 app.post('/settings', (req, res) => {
     const { businessName, apiKey, context } = req.body;
     settings = { businessName, apiKey, context };
     fs.writeFileSync('settings.json', JSON.stringify(settings));
-    console.log('Settings updated:', settings.businessName);
-    res.json({ message: 'Settings saved! AI is ready.' });
+    console.log(`Settings updated for: ${businessName}`);
+    res.json({ message: 'Settings saved.' });
 });
 
-// Clear auth_info on startup to force fresh session
-if (fs.existsSync('auth_info')) {
-    try {
-        fs.rmSync('auth_info', { recursive: true, force: true });
-        console.log('Cleared old auth_info session cache.');
-    } catch (err) {
-        console.error('Failed to clear auth_info (Permission Error?):', err.message);
-    }
-}
+// --- 3. WHATSAPP CONNECTION LOGIC ---
+let sock;
 
-async function connectToWhatsApp() {
-    updateStatus('Initializing Baileys...');
+async function startWhatsApp() {
+    updateStatus("Performing Factory Reset...");
+
+    // NUCLEAR CLEANUP: Delete ALL auth sessions to force fresh start
+    const sessions = ['auth_info', 'auth_session_v2', 'auth_session_v3', 'auth_session_v4', 'auth_session_v5', 'nuclear_session'];
+    for (const session of sessions) {
+        if (fs.existsSync(session)) {
+            try {
+                fs.rmSync(session, { recursive: true, force: true });
+                console.log(`Deleted corrupted session: ${session}`);
+            } catch (e) {
+                console.error(`Failed to delete ${session}: ${e.message}`);
+            }
+        }
+    }
+
+    updateStatus("Initializing Fresh Session...");
+
+    // We use a completely new session folder
+    const SESSION_DIR = 'nuclear_session';
 
     let state, saveCreds;
-
-    // Use v5 session for a final clean start
     try {
-        console.log('Loading Auth Session v5...');
-        ({ state, saveCreds } = await useMultiFileAuthState('auth_session_v5'));
-        console.log('Auth Loaded Successfully.');
-
-        updateStatus('Auth Loaded. Creating Socket...');
-
-        sock = makeWASocket({
-            auth: state,
-            printQRInTerminal: false,
-            logger: pino({ level: 'info' }),
-            browser: ['Ubuntu', 'Chrome', '20.0.04'], // Standard browser sig
-            connectTimeoutMs: 60000,
-            syncFullHistory: false
-        });
-    } catch (err) {
-        console.error('CRITICAL ERROR loading auth:', err);
-        updateStatus(`Critical Error: ${err.message}`);
+        ({ state, saveCreds } = await useMultiFileAuthState(SESSION_DIR));
+        console.log("New Session Storage Created.");
+    } catch (e) {
+        console.error("Storage Initialization Error:", e);
         return;
     }
 
-    sock.ev.on('connection.update', async (update) => {
+    updateStatus("Connecting to WhatsApp servers...");
+
+    sock = makeWASocket({
+        auth: state,
+        printQRInTerminal: false, // We handle QR manually
+        logger: pino({ level: 'info' }), // Basic logging
+        browser: ['Business AI', 'Chrome', '1.0.0'], // Custom browser signature
+        connectTimeoutMs: 60000,
+        syncFullHistory: false
+    });
+
+    // Event Listener for Connection Updates
+    sock.ev.on('connection.update', (update) => {
         const { connection, lastDisconnect, qr } = update;
 
         if (qr) {
-            console.log('QR Code generated');
+            console.log(">> QR CODE RECEIVED FROM SERVERS <<");
             lastQR = qr;
-            io.emit('qr', qr);
-            updateStatus('QR Generated. Please Scan.');
-            console.log(`DEBUG QR DATA: ${qr.substring(0, 20)}...`);
+            io.emit('qr', qr); // Send raw string to client to render
+            updateStatus("QR Code Ready. Scan now!");
+            console.log(`Debug QR: ${qr.substring(0, 15)}...`);
         }
 
         if (connection === 'close') {
-            const shouldReconnect = (lastDisconnect.error)?.output?.statusCode !== DisconnectReason.loggedOut;
-            const errorReason = (lastDisconnect.error)?.output?.payload?.message || lastDisconnect.error?.message || "Unknown Error";
+            const error = lastDisconnect?.error;
+            const statusCode = error?.output?.statusCode;
+            const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+            const reason = error?.output?.payload?.message || error?.message || "Unknown";
 
-            updateStatus(`Disconnected: ${errorReason}`);
+            console.error(`Connection Closed: ${reason} (Code: ${statusCode})`);
+            updateStatus(`Disconnected: ${reason}`);
 
             if (shouldReconnect) {
-                updateStatus(`Reconnecting in 5s due to: ${errorReason}`);
-                setTimeout(connectToWhatsApp, 5000);
+                updateStatus(`Reconnecting in 5 seconds...`);
+                setTimeout(startWhatsApp, 5000);
+            } else {
+                updateStatus("Session Expired. Please restart server or clear cache manually.");
             }
+
         } else if (connection === 'open') {
-            updateStatus('Connected ✅');
-            lastQR = ""; // Clear QR on connect
-            io.emit('qr', "");
+            console.log(">> CONNECTION SUCCESSFUL <<");
+            updateStatus("Connected & Active ✅");
+            io.emit('qr', ""); // Clear QR
         } else if (connection === 'connecting') {
-            updateStatus('Connecting to WhatsApp...');
+            updateStatus("Negotiating Connection...");
         }
     });
 
-    if (saveCreds) {
-        sock.ev.on('creds.update', saveCreds);
-    }
+    sock.ev.on('creds.update', saveCreds);
 
+    // Message Handling
     sock.ev.on('messages.upsert', async ({ messages, type }) => {
-        console.log(`Received Message Event: Type=${type}, Count=${messages.length}`);
+        if (type !== 'notify') return;
 
         for (const msg of messages) {
             try {
-                if (type !== 'notify') continue;
-                if (msg.key.remoteJid === 'status@broadcast') return;
+                if (msg.key.remoteJid === 'status@broadcast') continue;
 
-                const msgContent = msg.message;
-                const userMsg = msgContent?.conversation ||
-                    msgContent?.extendedTextMessage?.text ||
-                    msgContent?.ephemeralMessage?.message?.extendedTextMessage?.text ||
-                    msgContent?.ephemeralMessage?.message?.conversation;
+                const userText = msg.message?.conversation ||
+                    msg.message?.extendedTextMessage?.text;
 
-                if (!userMsg) {
-                    console.log('Skipping: No text content found in message.');
-                    continue;
-                }
+                if (!userText) continue;
 
-                const sender = msg.key.remoteJid;
-                console.log(`Msg from ${sender}: ${userMsg}`);
+                console.log(`Msg from ${msg.key.remoteJid}: ${userText}`);
 
+                // AI Processing
                 if (settings.apiKey) {
-                    console.log('Generating AI Reply...');
-                    try {
-                        const reply = await getAIReply(userMsg);
-                        console.log('AI Reply Generated:', reply);
-
-                        await sock.sendMessage(sender, { text: reply });
-                        console.log('Reply Sent!');
-                    } catch (aiErr) {
-                        console.error('AI Processing Error:', aiErr);
-                    }
-                } else {
-                    console.log('No API Key set. Skipping AI reply.');
+                    const reply = await getAIReply(userText);
+                    await sock.sendMessage(msg.key.remoteJid, { text: reply });
+                    console.log(`Sent AI Reply: ${reply}`);
                 }
-            } catch (err) {
-                console.error('Error in message loop:', err);
+            } catch (e) {
+                console.error("Message Handler Error:", e);
             }
         }
     });
 }
 
-async function getAIReply(userMsg) {
-    const genAI = new GoogleGenerativeAI(settings.apiKey);
-    const modelsToTry = ["gemini-1.5-flash", "gemini-1.5-flash-001", "gemini-1.0-pro", "gemini-pro"];
-
-    const prompt = `
-    You are a customer support agent for a business named "${settings.businessName}".
-    
-    Business Context:
-    ${settings.context}
-
-    User Message: "${userMsg}"
-    
-    Reply politely and helpfully based on the context. Keep it concise.
-    `;
-
-    for (const modelName of modelsToTry) {
-        try {
-            console.log(`Trying model: ${modelName}`);
-            const model = genAI.getGenerativeModel({ model: modelName });
-            const result = await model.generateContent(prompt);
-            const response = await result.response;
-            return response.text();
-        } catch (err) {
-            console.warn(`Failed with ${modelName}:`, err.message);
-            if (modelName === modelsToTry[modelsToTry.length - 1]) {
-                return `⚠️ DEBUG ERROR (All Models Failed): ${err.message}\n\nPlease check your API Key.`;
-            }
-        }
+// --- 4. AI LOGIC ---
+async function getAIReply(text) {
+    try {
+        const genAI = new GoogleGenerativeAI(settings.apiKey);
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        const result = await model.generateContent(`Act as a support agent for ${settings.businessName}. Context: ${settings.context}. User says: "${text}". Keep it brief.`);
+        return result.response.text();
+    } catch (e) {
+        return "I'm having trouble processing that request right now.";
     }
 }
 
+// --- 5. SERVER STARTUP ---
 io.on('connection', (socket) => {
-    console.log('Client connected to dashboard');
-    // Send current state immediately
+    console.log('Client connected.');
     socket.emit('status', lastStatus);
-    if (lastQR) {
-        socket.emit('qr', lastQR);
-    }
+    if (lastQR) socket.emit('qr', lastQR);
 });
 
-// Start
-connectToWhatsApp();
-
 server.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`Server Online on PORT ${PORT}`);
+    startWhatsApp();
 });
