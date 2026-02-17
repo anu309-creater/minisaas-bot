@@ -13,6 +13,14 @@ const io = new Server(server);
 
 const PORT = process.env.PORT || 3000;
 
+// Prevent crash on unhandled errors
+process.on('uncaughtException', (err) => {
+    console.error('UNCAUGHT EXCEPTION:', err);
+});
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('UNHANDLED REJECTION:', reason);
+});
+
 app.use(express.static('public'));
 app.use(express.json());
 
