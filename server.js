@@ -51,7 +51,8 @@ async function connectToWhatsApp() {
     sock = makeWASocket({
         auth: state,
         printQRInTerminal: true,
-        logger: pino({ level: 'silent' })
+        logger: pino({ level: 'info' }),
+        browser: ['WhatsApp AI Bot', 'Chrome', '1.0.0']
     });
 
     sock.ev.on('connection.update', async (update) => {
@@ -69,7 +70,8 @@ async function connectToWhatsApp() {
             console.log('Connection closed. Reconnecting:', shouldReconnect);
             io.emit('status', 'Disconnected');
             if (shouldReconnect) {
-                connectToWhatsApp();
+                // Add a small delay before reconnecting
+                setTimeout(connectToWhatsApp, 2000);
             }
         } else if (connection === 'open') {
             console.log('Opened connection to WhatsApp!');
@@ -80,13 +82,17 @@ async function connectToWhatsApp() {
     sock.ev.on('creds.update', saveCreds);
 
     sock.ev.on('messages.upsert', async ({ messages, type }) => {
-        if (type !== 'notify') return;
+        console.log(`Received Message Event: Type=${type}, Count=${messages.length}`);
 
         for (const msg of messages) {
             try {
-                // Log full message structure for debugging
-                console.log('--- Incoming Message ---');
-                console.log(JSON.stringify(msg, null, 2));
+                // Log strictly necessary info to avoid clutter
+                // console.log('Raw Message:', JSON.stringify(msg, null, 2));
+
+                if (type !== 'notify') {
+                    // console.log('Skipping non-notify message type');
+                    continue;
+                }
 
                 if (msg.key.remoteJid === 'status@broadcast') return;
 
@@ -107,39 +113,48 @@ async function connectToWhatsApp() {
 
                 if (settings.apiKey) {
                     console.log('Generating AI Reply...');
-                    const reply = await getAIReply(userMsg);
-                    console.log('AI Reply Generated:', reply);
+                    try {
+                        const reply = await getAIReply(userMsg);
+                        console.log('AI Reply Generated:', reply);
 
-                    await sock.sendMessage(sender, { text: reply });
-                    console.log('Reply Sent!');
+                        await sock.sendMessage(sender, { text: reply });
+                        console.log('Reply Sent!');
+                    } catch (aiErr) {
+                        console.error('AI Processing Error:', aiErr);
+                    }
                 } else {
                     console.log('No API Key set. Skipping AI reply.');
                 }
             } catch (err) {
-                console.error('Error processing message:', err);
+                console.error('Error in message loop:', err);
             }
         }
     });
 }
 
 async function getAIReply(userMsg) {
-    const genAI = new GoogleGenerativeAI(settings.apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+    try {
+        const genAI = new GoogleGenerativeAI(settings.apiKey);
+        const model = genAI.getGenerativeModel({ model: "gemini-pro" });
 
-    const prompt = `
-    You are a customer support agent for a business named "${settings.businessName}".
-    
-    Business Context:
-    ${settings.context}
+        const prompt = `
+        You are a customer support agent for a business named "${settings.businessName}".
+        
+        Business Context:
+        ${settings.context}
 
-    User Message: "${userMsg}"
-    
-    Reply politely and helpfully based on the context. Keep it concise.
-    `;
+        User Message: "${userMsg}"
+        
+        Reply politely and helpfully based on the context. Keep it concise.
+        `;
 
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    return response.text();
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+        return response.text();
+    } catch (err) {
+        console.error('Gemini API Error:', err);
+        return "I am currently experiencing technical difficulties. Please try again later.";
+    }
 }
 
 io.on('connection', (socket) => {
