@@ -127,48 +127,15 @@ async function connectToWhatsApp() {
                 }
             } catch (err) {
                 console.error('Error in message loop:', err);
+                socket.emit('status', 'Connected');
+            } else {
+                socket.emit('status', 'Disconnected/Waiting');
             }
-        }
+        });
+
+    // Start
+    connectToWhatsApp();
+
+    server.listen(PORT, () => {
+        console.log(`Server running on http://localhost:${PORT}`);
     });
-}
-
-async function getAIReply(userMsg) {
-    try {
-        const genAI = new GoogleGenerativeAI(settings.apiKey);
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-
-        const prompt = `
-        You are a customer support agent for a business named "${settings.businessName}".
-        
-        Business Context:
-        ${settings.context}
-
-        User Message: "${userMsg}"
-        
-        Reply politely and helpfully based on the context. Keep it concise.
-        `;
-
-        const result = await model.generateContent(prompt);
-        const response = await result.response;
-        return response.text();
-    } catch (err) {
-        console.error('Gemini API Error:', err);
-        return `⚠️ DEBUG ERROR: ${err.message}\n\nPlease check your API Key or Context.`;
-    }
-}
-
-io.on('connection', (socket) => {
-    console.log('Client connected to dashboard');
-    if (sock && sock.user) {
-        socket.emit('status', 'Connected');
-    } else {
-        socket.emit('status', 'Disconnected/Waiting');
-    }
-});
-
-// Start
-connectToWhatsApp();
-
-server.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-});
