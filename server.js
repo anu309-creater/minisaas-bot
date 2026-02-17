@@ -56,9 +56,9 @@ async function startWhatsApp() {
 
     sock = makeWASocket({
         auth: state,
-        printQRInTerminal: false, // Deprecated, set to false
-        logger: pino({ level: 'silent' }), // Keep clean
-        browser: Browsers.macOS('Desktop'), // Pairing code needs this
+        printQRInTerminal: false,
+        logger: pino({ level: 'silent' }),
+        browser: Browsers.macOS('Desktop'),
         connectTimeoutMs: 60000,
     });
 
@@ -84,18 +84,68 @@ async function startWhatsApp() {
             io.emit('status', 'Connected ✅');
             io.emit('qr', ''); // Clear QR
         }
-        io.on('connection', (socket) => {
-            socket.emit('log', 'Client Connected');
-            if (fs.existsSync('settings.json')) {
-                try { settings = JSON.parse(fs.readFileSync('settings.json')); } catch (e) { }
-            }
-        });
+    });
 
-        server.listen(PORT, () => {
-            console.log(`Server v4.1 running on ${PORT}`);
-            // Wipe on restart for fresh pairing
-            if (fs.existsSync('auth_info_v4')) {
-                try { fs.rmSync('auth_info_v4', { recursive: true, force: true }); } catch (e) { }
+    sock.ev.on('creds.update', saveCreds);
+
+    // AI Logic with Debug Logs
+    sock.ev.on('messages.upsert', async ({ messages, type }) => {
+        if (type !== 'notify') return;
+
+        for (const msg of messages) {
+            if (!msg.message) continue;
+
+            const remoteJid = msg.key.remoteJid;
+            const isMe = msg.key.fromMe;
+            const text = msg.message.conversation || msg.message.extendedTextMessage?.text;
+
+            // Log every message receipt
+            if (text) {
+                io.emit('log', `Rx: ${text.substring(0, 10)}... (Me: ${isMe})`);
             }
-            startWhatsApp();
-        });
+
+            if (isMe) continue;
+            if (!text) continue;
+
+            // Check Settings
+            if (!settings.apiKey) {
+                io.emit('log', '⚠ No API Key set. Ignoring.');
+                continue;
+            }
+
+            try {
+                io.emit('log', '🤖 AI Thinking...');
+                const genAI = new GoogleGenerativeAI(settings.apiKey);
+                const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+
+                const prompt = `Act as a support agent for ${settings.businessName}. user: ${text}`;
+                const result = await model.generateContent(prompt);
+                const response = result.response.text();
+
+                await sock.sendMessage(remoteJid, { text: response });
+                io.emit('log', `✅ Sent: ${response.substring(0, 10)}...`);
+
+            } catch (e) {
+                console.error('AI Error:', e.message);
+                io.emit('log', `❌ AI Error: ${e.message}`);
+            }
+        }
+    });
+}
+
+// --- INIT ---
+io.on('connection', (socket) => {
+    socket.emit('log', 'Client Connected');
+    if (fs.existsSync('settings.json')) {
+        try { settings = JSON.parse(fs.readFileSync('settings.json')); } catch (e) { }
+    }
+});
+
+server.listen(PORT, () => {
+    console.log(`Server v4.3 running on ${PORT}`);
+    // Wipe on restart for fresh pairing
+    if (fs.existsSync('auth_info_v4')) {
+        try { fs.rmSync('auth_info_v4', { recursive: true, force: true }); } catch (e) { }
+    }
+    startWhatsApp();
+});
