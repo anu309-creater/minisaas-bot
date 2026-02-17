@@ -48,37 +48,6 @@ app.post('/settings', (req, res) => {
 if (fs.existsSync('settings.json')) {
     try {
         const data = fs.readFileSync('settings.json', 'utf8');
-        if (data) settings = JSON.parse(data);
-    } catch (e) {
-        console.error("Error loading settings:", e);
-    }
-}
-
-// --- WHATSAPP LOGIC (v3.0 CLEAN) ---
-let sock;
-
-async function startWhatsApp() {
-    updateStatus("Preparing Session...");
-
-    // CLEANUP: If 'auth_info_live' exists but seems corrupted, we can't easily know.
-    // However, for this 'Fresh Setup', we want to ensure we aren't using old junk.
-    // We will use a standard folder 'auth_info_live'.
-
-    const { state, saveCreds } = await useMultiFileAuthState('auth_info_live');
-
-    updateStatus("Connecting to WhatsApp...");
-
-    sock = makeWASocket({
-        auth: state,
-        printQRInTerminal: false,
-        logger: pino({ level: 'silent' }), // Keep server logs clean
-        browser: ['Ubuntu', 'Chrome', '20.0.04'], // Standard signature
-        connectTimeoutMs: 60000,
-    });
-
-    sock.ev.on('connection.update', (update) => {
-        const { connection, lastDisconnect, qr } = update;
-
         if (qr) {
             console.log("QR Code Generated");
             lastQR = qr;

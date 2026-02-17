@@ -91,42 +91,22 @@
             <input type="text" id="businessName" placeholder="Business Name">
             <input type="password" id="apiKey" placeholder="Gemini API Key">
             <textarea id="context" rows="3" placeholder="Business Context (Menu, Hours...)"></textarea>
-            <button onclick="saveSettings()">Save Settings</button>
-            <p id="saveMsg" style="font-size: 0.9rem; color: green;"></p>
-        </div>
-
-        <div id="qr-container">Waiting for QR...</div>
-
-        <div class="footer">Fresh Install • No Logs • Clean UI</div>
-    </div>
-
-    <script>
-        const socket = io();
-        const statusEl = document.getElementById('status');
-        const qrContainer = document.getElementById('qr-container');
-        const saveMsg = document.getElementById('saveMsg');
-
-        socket.on('status', (msg) => {
-            statusEl.innerText = msg;
-            if (msg.includes("Connected")) {
-                statusEl.style.color = "green";
-                qrContainer.innerHTML = "<h3>✅ Linked</h3>";
             } else {
-                statusEl.style.color = "#007bff";
+            statusEl.style.color = "#007bff";
             }
-        });
+            });
 
-        socket.on('qr', (qr) => {
+            socket.on('qr', (qr) => {
             if (!qr) return;
             qrContainer.innerHTML = "";
             new QRCode(qrContainer, {
-                text: qr,
-                width: 256,
-                height: 256
+            text: qr,
+            width: 256,
+            height: 256
             });
-        });
+            });
 
-        async function saveSettings() {
+            async function saveSettings() {
             const businessName = document.getElementById('businessName').value;
             const apiKey = document.getElementById('apiKey').value;
             const context = document.getElementById('context').value;
@@ -134,16 +114,16 @@
             if (!businessName || !apiKey) return alert("Enter Name & API Key");
 
             const res = await fetch('/settings', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ businessName, apiKey, context })
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ businessName, apiKey, context })
             });
 
             const data = await res.json();
             saveMsg.innerText = data.message;
             setTimeout(() => saveMsg.innerText = "", 2000);
-        }
-    </script>
+            }
+            </script>
 
 </body>
 
