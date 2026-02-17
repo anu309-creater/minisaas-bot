@@ -118,6 +118,7 @@ async function startWhatsApp() {
         auth: state,
         printQRInTerminal: false, // We handle QR manually
         logger: pino({ level: 'info' }), // Basic logging
+        browser: ['Ubuntu', 'Chrome', '20.0.04'], // Standard Linux/Chrome signature
         connectTimeoutMs: 60000,
         syncFullHistory: false
     });
