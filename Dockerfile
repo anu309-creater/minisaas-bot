@@ -12,11 +12,11 @@ COPY package*.json ./
 RUN npm install --production
 
 # Copy the rest of the application
-COPY . .
+# Copy the rest of the application with correct permissions
+COPY --chown=node:node . .
 
-# Create volume directories for persistence
-RUN mkdir -p auth_info && chown -R node:node auth_info
-RUN echo "{}" > settings.json && chown node:node settings.json
+# Create volume directories for persistence (optional but good practice)
+RUN mkdir -p auth_info auth_session_v3 && chown -R node:node /app
 
 # Switch to non-root user for security
 USER node
