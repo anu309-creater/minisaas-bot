@@ -34,18 +34,27 @@ app.post('/settings', (req, res) => {
 
 app.post('/pair', async (req, res) => {
     const { phone } = req.body;
-    if (!sock) return res.status(503).json({ error: 'System Initializing...' });
+    console.log(`[PAIR] Request for ${phone}`);
+
+    if (!sock) {
+        console.log("[PAIR] System not ready (sock undefined)");
+        return res.status(503).json({ error: 'System Initializing... Wait 10s.' });
+    }
 
     try {
         if (!sock.authState.creds.me) {
+            console.log("[PAIR] Requesting code from Baileys...");
             const code = await sock.requestPairingCode(phone);
-            io.emit('log', `Pairing Code: ${code}`);
+            console.log(`[PAIR] Code received: ${code}`);
+            io.emit('log', `Pairing Code Generated: ${code}`);
             res.json({ code });
         } else {
+            console.log("[PAIR] Already connected");
             res.json({ message: 'Already Connected' });
         }
     } catch (e) {
-        res.status(500).json({ error: e.message });
+        console.error("[PAIR] Error:", e);
+        res.status(500).json({ error: "Failed: " + e.message });
     }
 });
 
@@ -58,7 +67,7 @@ async function startWhatsApp() {
         auth: state,
         printQRInTerminal: false,
         logger: pino({ level: 'silent' }),
-        browser: Browsers.macOS('Desktop'),
+        browser: ['Ubuntu', 'Chrome', '20.0.04'], // Standard Browser
         connectTimeoutMs: 60000,
     });
 
