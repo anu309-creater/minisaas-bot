@@ -4,177 +4,190 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WhatsApp Bot v3.4</title>
+    <title>WhatsApp Bot v4.0</title>
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
         body {
             font-family: sans-serif;
-            background: #f4f4f9;
+            background: #f0f2f5;
             display: flex;
-            justify-content: center;
+            center;
             align-items: center;
-            min-height: 100vh;
+            justify-content: center;
+            height: 100vh;
             margin: 0;
         }
 
-        .container {
+        .card {
             background: white;
-            padding: 2rem;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            width: 100%;
-            max-width: 400px;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            width: 350px;
             text-align: center;
         }
 
-        h1 {
-            font-size: 1.5rem;
-            margin-bottom: 0.5rem;
-            color: #333;
-        }
-
-        .status {
-            font-weight: bold;
-            color: #007bff;
-            margin-bottom: 1rem;
-        }
-
         input,
-        textarea,
-        button {
+        button,
+        textarea {
             width: 100%;
-            padding: 10px;
+            padding: 12px;
             margin-top: 10px;
             border: 1px solid #ddd;
-            border-radius: 4px;
+            border-radius: 8px;
             box-sizing: border-box;
         }
 
         button {
-            background: #28a745;
+            background: #008069;
             color: white;
             border: none;
-            cursor: pointer;
             font-weight: bold;
+            cursor: pointer;
         }
 
         button:hover {
-            background: #218838;
+            background: #006d59;
         }
 
         #qr-container {
             margin: 20px auto;
-            width: 256px;
-            height: 256px;
-            background: #eee;
+            width: 200px;
+            height: 200px;
             display: flex;
             align-items: center;
             justify-content: center;
+            background: #eee;
         }
 
-        .footer {
-            margin-top: 20px;
-            font-size: 0.8rem;
-            color: #888;
+        #pairing-code {
+            font-size: 24px;
+            font-weight: bold;
+            letter-spacing: 5px;
+            color: #008069;
+            margin: 20px 0;
+        }
+
+        .mode-switch {
+            font-size: 12px;
+            color: #666;
+            cursor: pointer;
+            text-decoration: underline;
+            margin-top: 10px;
         }
 
         #logs {
-            display: none;
-            margin-top: 20px;
             font-size: 10px;
-            color: #666;
             text-align: left;
             max-height: 100px;
             overflow-y: auto;
-            background: #eee;
+            background: #f9f9f9;
             padding: 5px;
+            margin-top: 20px;
+            border-radius: 4px;
         }
     </style>
 </head>
 
 <body>
 
-    <div class="container">
-        <h1>Bot Setup v3.4</h1>
-        <div id="status" class="status">Connecting...</div>
+    <div class="card">
+        <h2>Bot v4.0 Setup</h2>
+        <div id="status" style="color: #666; margin-bottom: 20px;">Initializing...</div>
 
-        <div id="setup-form">
+        <!-- Settings Form -->
+        <div id="settings-view">
             <input type="text" id="businessName" placeholder="Business Name">
             <input type="password" id="apiKey" placeholder="Gemini API Key">
-            <textarea id="context" rows="3" placeholder="Business Context (Menu, Hours...)"></textarea>
-            <button onclick="saveSettings()">Save Settings</button>
-            <p id="saveMsg" style="font-size: 0.9rem; color: green;"></p>
+            <button onclick="saveSettings()">Save & Continue</button>
         </div>
 
-        <div id="qr-container">Waiting for QR...</div>
+        <!-- Connection View -->
+        <div id="connection-view" style="display: none;">
+            <h3>Connect WhatsApp</h3>
 
-        <div id="logs">
-            <div>> Initializing Logs...</div>
+            <!-- Tab: Pairing Code -->
+            <div id="tab-pair">
+                <input type="text" id="phone" placeholder="Phone (e.g. 923001234567)">
+                <button onclick="getPairingCode()">Get Pairing Code</button>
+                <div id="pairing-code"></div>
+            </div>
+
+            <!-- Tab: QR Code -->
+            <div id="tab-qr" style="display: none;">
+                <div id="qr-container">Waiting for QR...</div>
+            </div>
+
+            <div class="mode-switch" onclick="toggleMode()">Switch to QR / Pairing Code</div>
         </div>
 
-        <div class="footer">Stable Release • Auto-Logs</div>
+        <div id="logs"></div>
     </div>
 
     <script>
         const socket = io();
-        const statusEl = document.getElementById('status');
-        const qrContainer = document.getElementById('qr-container');
-        const saveMsg = document.getElementById('saveMsg');
-        const logsEl = document.getElementById('logs');
+        let mode = 'pair'; // 'pair' or 'qr'
 
-        // Socket: Status Update
+        // Status
         socket.on('status', (msg) => {
-            statusEl.innerText = msg;
-
-            // Auto-show logs on error
-            if (msg.includes("Reconnecting") || msg.includes("Disconnected") || msg.toLowerCase().includes("error")) {
-                statusEl.style.color = "red";
-                logsEl.style.display = 'block';
-            } else if (msg.includes("Connected")) {
-                statusEl.style.color = "green";
-                qrContainer.innerHTML = "<h3>✅ Linked</h3>";
-                logsEl.style.display = 'none';
-            } else {
-                statusEl.style.color = "#007bff";
+            document.getElementById('status').innerText = msg;
+            if (msg.includes("Connected")) {
+                document.getElementById('connection-view').innerHTML = "<h3>✅ Connected!</h3><p>Bot is active.</p>";
             }
         });
 
-        // Socket: QR Code
-        socket.on('qr', (qr) => {
-            if (!qr) return;
-            qrContainer.innerHTML = "";
-            new QRCode(qrContainer, {
-                text: qr,
-                width: 256,
-                height: 256
-            });
-        });
-
-        // Socket: Logs
+        // Logs
         socket.on('log', (msg) => {
             const div = document.createElement('div');
             div.innerText = `> ${msg}`;
-            logsEl.prepend(div);
+            document.getElementById('logs').prepend(div);
         });
 
-        // API: Save Settings
+        // QR
+        socket.on('qr', (code) => {
+            if (mode === 'qr' && code) {
+                document.getElementById('qr-container').innerHTML = "";
+                new QRCode(document.getElementById('qr-container'), { text: code, width: 200, height: 200 });
+            }
+        });
+
+        function toggleMode() {
+            mode = mode === 'pair' ? 'qr' : 'pair';
+            document.getElementById('tab-pair').style.display = mode === 'pair' ? 'block' : 'none';
+            document.getElementById('tab-qr').style.display = mode === 'qr' ? 'block' : 'none';
+        }
+
         async function saveSettings() {
             const businessName = document.getElementById('businessName').value;
             const apiKey = document.getElementById('apiKey').value;
-            const context = document.getElementById('context').value;
+            if (!businessName || !apiKey) return alert("Required!");
 
-            if (!businessName || !apiKey) return alert("Enter Name & API Key");
-
-            const res = await fetch('/settings', {
+            await fetch('/settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ businessName, apiKey, context })
+                body: JSON.stringify({ businessName, apiKey })
             });
 
+            document.getElementById('settings-view').style.display = 'none';
+            document.getElementById('connection-view').style.display = 'block';
+        }
+
+        async function getPairingCode() {
+            const phone = document.getElementById('phone').value;
+            if (!phone) return alert("Enter Phone Number");
+
+            const res = await fetch('/pair', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phone })
+            });
             const data = await res.json();
-            saveMsg.innerText = data.message;
-            setTimeout(() => saveMsg.innerText = "", 2000);
+            if (data.code) {
+                document.getElementById('pairing-code').innerText = data.code;
+            } else {
+                alert(data.error || data.message);
+            }
         }
     </script>
 

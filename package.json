@@ -1,15 +1,14 @@
 {
-  "name": "minisaas",
-  "version": "3.0.0",
-  "description": "WhatsApp Business AI Assistant",
+  "name": "minisaas-v4",
+  "version": "4.0.0",
+  "description": "WhatsApp Bot with Pairing Code",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node server.js"
   },
   "dependencies": {
     "@google/generative-ai": "^0.2.1",
-    "@whiskeysockets/baileys": "^6.7.9",
+    "@whiskeysockets/baileys": "latest",
     "express": "^4.21.2",
     "pino": "^9.6.0",
     "qrcode": "^1.5.4",
