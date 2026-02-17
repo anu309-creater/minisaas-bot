@@ -59,53 +59,6 @@ if (fs.existsSync('auth_info')) {
         fs.rmSync('auth_info', { recursive: true, force: true });
         console.log('Cleared auth_info session cache.');
     } catch (err) {
-        console.error('Failed to clear auth_info (Permission Error?):', err.message);
-        // Continue anyway, maybe the existing session is fine or we can overwrite files inside
-    }
-}
-
-async function connectToWhatsApp() {
-    const { state, saveCreds } = await useMultiFileAuthState('auth_session_v2');
-
-    sock = makeWASocket({
-        auth: state,
-        printQRInTerminal: false,
-        logger: pino({ level: 'info' }),
-        browser: ['Ubuntu', 'Chrome', '20.0.04'],
-        connectTimeoutMs: 60000, // 60 seconds timeout
-        syncFullHistory: false // Don't sync full history to prevent timeouts
-    });
-
-    sock.ev.on('connection.update', async (update) => {
-        const { connection, lastDisconnect, qr } = update;
-
-        if (qr) {
-            console.log('QR Code generated');
-            qrcode.toDataURL(qr, (err, url) => {
-                io.emit('qr', url);
-            });
-        }
-
-        if (connection === 'close') {
-            const shouldReconnect = (lastDisconnect.error)?.output?.statusCode !== DisconnectReason.loggedOut;
-            const errorReason = (lastDisconnect.error)?.output?.payload?.message || lastDisconnect.error?.message || "Unknown Error";
-
-            console.log('Connection closed:', errorReason);
-            io.emit('status', `Disconnected: ${errorReason}`);
-
-            if (shouldReconnect) {
-                // Add a small delay before reconnecting
-                setTimeout(connectToWhatsApp, 3000);
-            }
-        } else if (connection === 'open') {
-            console.log('Opened connection to WhatsApp!');
-            io.emit('status', 'Connected');
-        }
-    });
-
-    sock.ev.on('creds.update', saveCreds);
-
-    sock.ev.on('messages.upsert', async ({ messages, type }) => {
         console.log(`Received Message Event: Type=${type}, Count=${messages.length}`);
 
         for (const msg of messages) {
