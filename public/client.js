@@ -68,6 +68,22 @@ async function saveSettings() {
     const data = await res.json();
     saveStatusEl.innerText = data.message;
     setTimeout(() => saveStatusEl.innerText = '', 3000);
+    const data = await res.json();
+    saveStatusEl.innerText = data.message;
+    setTimeout(() => saveStatusEl.innerText = '', 3000);
+}
+
+// Reset Session
+async function resetSession() {
+    if (!confirm("Are you sure? This will delete all session data and restart the bot.")) return;
+
+    document.getElementById('resetMsg').innerText = "Reseting...";
+    try {
+        await fetch('/reset-session', { method: 'POST' });
+        document.getElementById('resetMsg').innerText = "Done. Wait for restart...";
+    } catch (e) {
+        document.getElementById('resetMsg').innerText = "Error: " + e.message;
+    }
 }
 
 function log(msg) {
