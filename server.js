@@ -83,34 +83,40 @@ async function connectToWhatsApp() {
         if (type !== 'notify') return;
 
         for (const msg of messages) {
-            console.log('Raw message:', JSON.stringify(msg.key)); // Debug log
+            try {
+                // Log full message structure for debugging
+                console.log('--- Incoming Message ---');
+                console.log(JSON.stringify(msg, null, 2));
 
-            // Ignore status updates
-            if (msg.key.remoteJid === 'status@broadcast') return;
+                if (msg.key.remoteJid === 'status@broadcast') return;
 
-            // Allow self-messages for testing (Commented out the check)
-            // if (msg.key.fromMe) return; 
+                // Extract message text from various possible locations
+                const msgContent = msg.message;
+                const userMsg = msgContent?.conversation ||
+                    msgContent?.extendedTextMessage?.text ||
+                    msgContent?.ephemeralMessage?.message?.extendedTextMessage?.text ||
+                    msgContent?.ephemeralMessage?.message?.conversation;
 
-            // Only reply to private chats (optional, remove this line if you want group support)
-            if (!msg.key.remoteJid.endsWith('@s.whatsapp.net')) return;
-
-            if (msg.message) {
-                const userMsg = msg.message.conversation || msg.message.extendedTextMessage?.text;
-                if (!userMsg) continue;
+                if (!userMsg) {
+                    console.log('Skipping: No text content found in message.');
+                    continue;
+                }
 
                 const sender = msg.key.remoteJid;
                 console.log(`Msg from ${sender}: ${userMsg}`);
 
                 if (settings.apiKey) {
-                    try {
-                        const reply = await getAIReply(userMsg);
-                        await sock.sendMessage(sender, { text: reply });
-                    } catch (err) {
-                        console.error('AI Error:', err);
-                    }
+                    console.log('Generating AI Reply...');
+                    const reply = await getAIReply(userMsg);
+                    console.log('AI Reply Generated:', reply);
+
+                    await sock.sendMessage(sender, { text: reply });
+                    console.log('Reply Sent!');
                 } else {
                     console.log('No API Key set. Skipping AI reply.');
                 }
+            } catch (err) {
+                console.error('Error processing message:', err);
             }
         }
     });
