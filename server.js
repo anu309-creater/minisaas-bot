@@ -75,11 +75,14 @@ async function connectToWhatsApp() {
 
         if (connection === 'close') {
             const shouldReconnect = (lastDisconnect.error)?.output?.statusCode !== DisconnectReason.loggedOut;
-            console.log('Connection closed. Reconnecting:', shouldReconnect);
-            io.emit('status', 'Disconnected');
+            const errorReason = (lastDisconnect.error)?.output?.payload?.message || lastDisconnect.error?.message || "Unknown Error";
+
+            console.log('Connection closed:', errorReason);
+            io.emit('status', `Disconnected: ${errorReason}`);
+
             if (shouldReconnect) {
                 // Add a small delay before reconnecting
-                setTimeout(connectToWhatsApp, 2000);
+                setTimeout(connectToWhatsApp, 3000);
             }
         } else if (connection === 'open') {
             console.log('Opened connection to WhatsApp!');
