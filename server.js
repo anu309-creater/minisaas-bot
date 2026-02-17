@@ -53,6 +53,11 @@ app.post('/settings', (req, res) => {
     res.json({ message: 'Settings saved! AI is ready.' });
 });
 
+// Clear auth_info on startup to force fresh session
+if (fs.existsSync('auth_info')) {
+    fs.rmSync('auth_info', { recursive: true, force: true });
+}
+
 async function connectToWhatsApp() {
     const { state, saveCreds } = await useMultiFileAuthState('auth_info');
 
@@ -60,7 +65,9 @@ async function connectToWhatsApp() {
         auth: state,
         printQRInTerminal: false,
         logger: pino({ level: 'info' }),
-        browser: ['Ubuntu', 'Chrome', '20.0.04']
+        browser: ['Ubuntu', 'Chrome', '20.0.04'],
+        connectTimeoutMs: 60000, // 60 seconds timeout
+        syncFullHistory: false // Don't sync full history to prevent timeouts
     });
 
     sock.ev.on('connection.update', async (update) => {
