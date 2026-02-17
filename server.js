@@ -50,6 +50,69 @@ app.post('/pair', async (req, res) => {
 });
 
 // --- CORE ---
+async function startWhatsApp() {
+    // Ensure clean slate
+    const { state, saveCreds } = await useMultiFileAuthState('auth_info_v4');
+
+    sock = makeWASocket({
+        auth: state,
+        printQRInTerminal: false, // Deprecated, set to false
+        logger: pino({ level: 'silent' }), // Keep clean
+        browser: Browsers.macOS('Desktop'), // Pairing code needs this
+        connectTimeoutMs: 60000,
+    });
+
+    sock.ev.on('connection.update', (update) => {
+        const { connection, lastDisconnect, qr } = update;
+
+        if (qr) io.emit('qr', qr);
+
+        if (connection === 'close') {
+            const shouldReconnect = (lastDisconnect.error)?.output?.statusCode !== DisconnectReason.loggedOut;
+            io.emit('status', `Disconnected: ${lastDisconnect.error?.message}`);
+
+            if (shouldReconnect) {
+                setTimeout(startWhatsApp, 5000); // 5s Retry
+            } else {
+                // Logged out
+                try {
+                    fs.rmSync('auth_info_v4', { recursive: true, force: true });
+                    startWhatsApp();
+                } catch (e) { console.error(e); }
+            }
+        } else if (connection === 'open') {
+            io.emit('status', 'Connected ✅');
+            io.emit('qr', ''); // Clear QR
+        }
+    });
+
+    sock.ev.on('creds.update', saveCreds);
+
+    // AI Logic
+    sock.ev.on('messages.upsert', async ({ messages, type }) => {
+        if (type !== 'notify') return;
+        for (const msg of messages) {
+            if (!msg.message || msg.key.fromMe) continue;
+
+            const text = msg.message.conversation || msg.message.extendedTextMessage?.text;
+            if (!text) continue;
+
+            if (settings.apiKey) {
+                try {
+                    const genAI = new GoogleGenerativeAI(settings.apiKey);
+                    // Use gemini-pro as stable model
+                    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+                    const result = await model.generateContent(`Act as a support agent for ${settings.businessName}. user: ${text}`);
+                    await sock.sendMessage(msg.key.remoteJid, { text: result.response.text() });
+                } catch (e) {
+                    console.error('AI Error:', e.message);
+                }
+            }
+        }
+    });
+}
+
+// --- INIT ---
 io.on('connection', (socket) => {
     socket.emit('log', 'Client Connected');
     if (fs.existsSync('settings.json')) {
@@ -58,8 +121,10 @@ io.on('connection', (socket) => {
 });
 
 server.listen(PORT, () => {
-    console.log(`Server v4.0 running on ${PORT}`);
+    console.log(`Server v4.1 running on ${PORT}`);
     // Wipe on restart for fresh pairing
-    if (fs.existsSync('auth_info_v4')) fs.rmSync('auth_info_v4', { recursive: true, force: true });
+    if (fs.existsSync('auth_info_v4')) {
+        try { fs.rmSync('auth_info_v4', { recursive: true, force: true }); } catch (e) { }
+    }
     startWhatsApp();
 });
