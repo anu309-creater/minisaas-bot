@@ -86,17 +86,9 @@ async function connectToWhatsApp() {
 
         for (const msg of messages) {
             try {
-                // Log strictly necessary info to avoid clutter
-                // console.log('Raw Message:', JSON.stringify(msg, null, 2));
-
-                if (type !== 'notify') {
-                    // console.log('Skipping non-notify message type');
-                    continue;
-                }
-
+                if (type !== 'notify') continue;
                 if (msg.key.remoteJid === 'status@broadcast') return;
 
-                // Extract message text from various possible locations
                 const msgContent = msg.message;
                 const userMsg = msgContent?.conversation ||
                     msgContent?.extendedTextMessage?.text ||
@@ -127,15 +119,54 @@ async function connectToWhatsApp() {
                 }
             } catch (err) {
                 console.error('Error in message loop:', err);
-                socket.emit('status', 'Connected');
-            } else {
-                socket.emit('status', 'Disconnected/Waiting');
             }
-        });
-
-    // Start
-    connectToWhatsApp();
-
-    server.listen(PORT, () => {
-        console.log(`Server running on http://localhost:${PORT}`);
+        }
     });
+}
+
+async function getAIReply(userMsg) {
+    const genAI = new GoogleGenerativeAI(settings.apiKey);
+    const modelsToTry = ["gemini-1.5-flash", "gemini-1.5-flash-001", "gemini-1.0-pro", "gemini-pro"];
+
+    const prompt = `
+    You are a customer support agent for a business named "${settings.businessName}".
+    
+    Business Context:
+    ${settings.context}
+
+    User Message: "${userMsg}"
+    
+    Reply politely and helpfully based on the context. Keep it concise.
+    `;
+
+    for (const modelName of modelsToTry) {
+        try {
+            console.log(`Trying model: ${modelName}`);
+            const model = genAI.getGenerativeModel({ model: modelName });
+            const result = await model.generateContent(prompt);
+            const response = await result.response;
+            return response.text();
+        } catch (err) {
+            console.warn(`Failed with ${modelName}:`, err.message);
+            if (modelName === modelsToTry[modelsToTry.length - 1]) {
+                return `⚠️ DEBUG ERROR (All Models Failed): ${err.message}\n\nPlease check your API Key.`;
+            }
+        }
+    }
+}
+
+io.on('connection', (socket) => {
+    console.log('Client connected to dashboard');
+    if (sock && sock.user) {
+        socket.emit('status', 'Connected');
+    } else {
+        socket.emit('status', 'Disconnected/Waiting');
+    }
+});
+
+// Start
+connectToWhatsApp();
+
+server.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+});
