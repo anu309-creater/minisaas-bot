@@ -95,10 +95,12 @@ if (fs.existsSync('auth_info')) {
 async function connectToWhatsApp() {
     updateStatus('Initializing Baileys...');
 
-    // Use v4 session to ensure fresh start
+    let state, saveCreds;
+
+    // Use v5 session for a final clean start
     try {
-        console.log('Loading Auth Session v4...');
-        const { state, saveCreds } = await useMultiFileAuthState('auth_session_v4');
+        console.log('Loading Auth Session v5...');
+        ({ state, saveCreds } = await useMultiFileAuthState('auth_session_v5'));
         console.log('Auth Loaded Successfully.');
 
         updateStatus('Auth Loaded. Creating Socket...');
@@ -107,7 +109,7 @@ async function connectToWhatsApp() {
             auth: state,
             printQRInTerminal: false,
             logger: pino({ level: 'info' }),
-            browser: ['Ubuntu', 'Chrome', '22.0.04'], // Functioning browser signature
+            browser: ['Ubuntu', 'Chrome', '20.0.04'], // Standard browser sig
             connectTimeoutMs: 60000,
             syncFullHistory: false
         });
@@ -123,8 +125,9 @@ async function connectToWhatsApp() {
         if (qr) {
             console.log('QR Code generated');
             lastQR = qr;
-            io.emit('qr', qr); // Send raw QR to client for rendering
+            io.emit('qr', qr);
             updateStatus('QR Generated. Please Scan.');
+            console.log(`DEBUG QR DATA: ${qr.substring(0, 20)}...`);
         }
 
         if (connection === 'close') {
@@ -146,7 +149,9 @@ async function connectToWhatsApp() {
         }
     });
 
-    sock.ev.on('creds.update', saveCreds);
+    if (saveCreds) {
+        sock.ev.on('creds.update', saveCreds);
+    }
 
     sock.ev.on('messages.upsert', async ({ messages, type }) => {
         console.log(`Received Message Event: Type=${type}, Count=${messages.length}`);
