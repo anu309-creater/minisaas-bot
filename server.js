@@ -135,7 +135,7 @@ async function connectToWhatsApp() {
 async function getAIReply(userMsg) {
     try {
         const genAI = new GoogleGenerativeAI(settings.apiKey);
-        const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
         const prompt = `
         You are a customer support agent for a business named "${settings.businessName}".
@@ -153,7 +153,7 @@ async function getAIReply(userMsg) {
         return response.text();
     } catch (err) {
         console.error('Gemini API Error:', err);
-        return "I am currently experiencing technical difficulties. Please try again later.";
+        return `⚠️ DEBUG ERROR: ${err.message}\n\nPlease check your API Key or Context.`;
     }
 }
 
