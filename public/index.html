@@ -4,57 +4,147 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Business AI Bot Dashboard</title>
-    <link rel="stylesheet" href="style.css">
+    <title>WhatsApp Bot v3.0</title>
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        body {
+            font-family: sans-serif;
+            background: #f4f4f9;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+
+        .container {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+            color: #333;
+        }
+
+        .status {
+            font-weight: bold;
+            color: #007bff;
+            margin-bottom: 1rem;
+        }
+
+        input,
+        textarea,
+        button {
+            width: 100%;
+            padding: 10px;
+            margin-top: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+
+        button {
+            background: #28a745;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        button:hover {
+            background: #218838;
+        }
+
+        #qr-container {
+            margin: 20px auto;
+            width: 256px;
+            height: 256px;
+            background: #eee;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .footer {
+            margin-top: 20px;
+            font-size: 0.8rem;
+            color: #888;
+        }
+    </style>
 </head>
 
 <body>
+
     <div class="container">
-        <h1>Business AI Bot Setup <span style="font-size: 12px; color: #ff0000;">v2.1 (Layout Fix)</span></h1>
+        <h1>Bot Setup v3.0</h1>
+        <div id="status" class="status">Connecting...</div>
 
-        <div class="card">
-            <h2>1. Business Details</h2>
-            <div class="form-group">
-                <label>Business Name</label>
-                <input type="text" id="businessName" placeholder="e.g. Pizza Paradise">
-            </div>
-            <div class="form-group">
-                <label>Gemini API Key</label>
-                <input type="password" id="apiKey" placeholder="AI Studio Key">
-            </div>
-            <div class="form-group">
-                <label>Business Context (The Brain)</label>
-                <textarea id="context" rows="6"
-                    placeholder="Describe your business, menu, opening hours, etc."></textarea>
-            </div>
+        <div id="setup-form">
+            <input type="text" id="businessName" placeholder="Business Name">
+            <input type="password" id="apiKey" placeholder="Gemini API Key">
+            <textarea id="context" rows="3" placeholder="Business Context (Menu, Hours...)"></textarea>
             <button onclick="saveSettings()">Save Settings</button>
-            <p id="saveStatus"></p>
+            <p id="saveMsg" style="font-size: 0.9rem; color: green;"></p>
         </div>
 
-        <div class="card">
-            <h2>Connection Status</h2>
-            <div id="qr-container">
-                <p>Waiting for QR Code...</p>
-            </div>
-            <p id="connection-status" class="status">Disconnected</p>
+        <div id="qr-container">Waiting for QR...</div>
 
-            <button onclick="resetSession()" style="background-color: #dc3545; margin-top: 10px;">⚠️ Hard Reset
-                Session</button>
-            <p id="resetMsg" style="font-size: 11px; color: #666;"></p>
-
-
-            <details style="margin-top: 10px; cursor: pointer;">
-                <summary style="font-size: 12px; color: #666;">View System Logs (Debug)</summary>
-                <div id="logs" class="logs"
-                    style="max-height: 150px; overflow-y: auto; font-size: 11px; margin-top: 5px; background: #f0f0f0; padding: 5px;">
-                    <p>> System Initializing...</p>
-                </div>
-            </details>
-        </div>
+        <div class="footer">Fresh Install • No Logs • Clean UI</div>
     </div>
-    <script src="client.js"></script>
+
+    <script>
+        const socket = io();
+        const statusEl = document.getElementById('status');
+        const qrContainer = document.getElementById('qr-container');
+        const saveMsg = document.getElementById('saveMsg');
+
+        socket.on('status', (msg) => {
+            statusEl.innerText = msg;
+            if (msg.includes("Connected")) {
+                statusEl.style.color = "green";
+                qrContainer.innerHTML = "<h3>✅ Linked</h3>";
+            } else {
+                statusEl.style.color = "#007bff";
+            }
+        });
+
+        socket.on('qr', (qr) => {
+            if (!qr) return;
+            qrContainer.innerHTML = "";
+            new QRCode(qrContainer, {
+                text: qr,
+                width: 256,
+                height: 256
+            });
+        });
+
+        async function saveSettings() {
+            const businessName = document.getElementById('businessName').value;
+            const apiKey = document.getElementById('apiKey').value;
+            const context = document.getElementById('context').value;
+
+            if (!businessName || !apiKey) return alert("Enter Name & API Key");
+
+            const res = await fetch('/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ businessName, apiKey, context })
+            });
+
+            const data = await res.json();
+            saveMsg.innerText = data.message;
+            setTimeout(() => saveMsg.innerText = "", 2000);
+        }
+    </script>
+
 </body>
 
 </html>

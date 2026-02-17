@@ -2,7 +2,6 @@ const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = requi
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
-const qrcode = require('qrcode');
 const fs = require('fs');
 const pino = require('pino');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
@@ -13,111 +12,168 @@ const io = new Server(server);
 
 const PORT = process.env.PORT || 3000;
 
-// --- 1. LOGGING & DEBUGGING MIDDLEWARE ---
-// Override console.log/error to emit events to the frontend
-const originalLog = console.log;
-console.log = function (...args) {
-    originalLog.apply(console, args);
-    if (io) {
-        const msg = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ');
-        io.emit('log', msg);
-    }
-};
-
-const originalError = console.error;
-console.error = function (...args) {
-    originalError.apply(console, args);
-    if (io) {
-        const msg = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ');
-        io.emit('log', `ERROR: ${msg}`);
-    }
-};
-
-// Prevent silent crashes
-process.on('uncaughtException', (err) => {
-    console.error('CRITICAL UNCAUGHT EXCEPTION:', err);
-});
-process.on('unhandledRejection', (reason, promise) => {
-    console.error('CRITICAL UNHANDLED REJECTION:', reason);
-});
-
-// --- 2. CONFIGURATION & STATE ---
-app.use(express.static('public'));
-app.use(express.json());
-
+// --- STATE MANAGEMENT ---
 let settings = {
     businessName: "My Business",
     apiKey: "",
     context: "I am a helpful assistant."
 };
-let lastStatus = "Starting System...";
+let lastStatus = "Initializing...";
 let lastQR = "";
 
-// Helper to update status
+// --- MIDDLEWARE ---
+app.use(express.static('public'));
+app.use(express.json());
+
+// --- UTILS ---
 function updateStatus(msg) {
     lastStatus = msg;
     io.emit('status', msg);
-    console.log(`STATUS: ${msg}`);
+    console.log(`[STATUS] ${msg}`);
 }
 
-// Load settings
+// --- API ROUTES ---
+app.post('/settings', (req, res) => {
+    const { businessName, apiKey, context } = req.body;
+    settings = { businessName, apiKey, context };
+
+    // Simple file persistence
+    fs.writeFileSync('settings.json', JSON.stringify(settings));
+
+    console.log(`Settings updated for ${businessName}`);
+    res.json({ message: 'Settings Saved. AI Ready.' });
+});
+
+// Load settings on start
 if (fs.existsSync('settings.json')) {
     try {
         const data = fs.readFileSync('settings.json', 'utf8');
-        updateStatus("Negotiating Connection...");
+        if (data) settings = JSON.parse(data);
+    } catch (e) {
+        console.error("Error loading settings:", e);
     }
+}
+
+// --- WHATSAPP LOGIC (v3.0 CLEAN) ---
+let sock;
+
+async function startWhatsApp() {
+    updateStatus("Preparing Session...");
+
+    // CLEANUP: If 'auth_info_live' exists but seems corrupted, we can't easily know.
+    // However, for this 'Fresh Setup', we want to ensure we aren't using old junk.
+    // We will use a standard folder 'auth_info_live'.
+
+    const { state, saveCreds } = await useMultiFileAuthState('auth_info_live');
+
+    updateStatus("Connecting to WhatsApp...");
+
+    sock = makeWASocket({
+        auth: state,
+        printQRInTerminal: false,
+        logger: pino({ level: 'silent' }), // Keep server logs clean
+        browser: ['Ubuntu', 'Chrome', '20.0.04'], // Standard signature
+        connectTimeoutMs: 60000,
     });
 
-sock.ev.on('creds.update', saveCreds);
+    sock.ev.on('connection.update', (update) => {
+        const { connection, lastDisconnect, qr } = update;
 
-// Message Handling
-sock.ev.on('messages.upsert', async ({ messages, type }) => {
-    if (type !== 'notify') return;
-
-    for (const msg of messages) {
-        try {
-            if (msg.key.remoteJid === 'status@broadcast') continue;
-
-            const userText = msg.message?.conversation ||
-                msg.message?.extendedTextMessage?.text;
-
-            if (!userText) continue;
-
-            console.log(`Msg from ${msg.key.remoteJid}: ${userText}`);
-
-            // AI Processing
-            if (settings.apiKey) {
-                const reply = await getAIReply(userText);
-                await sock.sendMessage(msg.key.remoteJid, { text: reply });
-                console.log(`Sent AI Reply: ${reply}`);
-            }
-        } catch (e) {
-            console.error("Message Handler Error:", e);
+        if (qr) {
+            console.log("QR Code Generated");
+            lastQR = qr;
+            io.emit('qr', qr);
+            updateStatus("Scan QR Code");
         }
-    }
-});
+
+        if (connection === 'close') {
+            const shouldReconnect = (lastDisconnect.error)?.output?.statusCode !== DisconnectReason.loggedOut;
+            const reason = (lastDisconnect.error)?.output?.payload?.message || "Connection Closed";
+
+            updateStatus(`Disconnected: ${reason}`);
+
+            if (shouldReconnect) {
+                updateStatus("Reconnecting...");
+                setTimeout(startWhatsApp, 3000);
+            } else {
+                updateStatus("Session Logged Out. Delete 'auth_info_live' to reset.");
+                // Optional: Auto-delete on logout
+                try {
+                    fs.rmSync('auth_info_live', { recursive: true, force: true });
+                    startWhatsApp();
+                } catch (e) { console.error(e); }
+            }
+
+        } else if (connection === 'open') {
+            updateStatus("Connected ✅");
+            io.emit('qr', ""); // Clear QR
+            io.emit('log', "WhatsApp Connected!");
+        }
+    });
+
+    sock.ev.on('creds.update', saveCreds);
+
+    sock.ev.on('messages.upsert', async ({ messages, type }) => {
+        if (type !== 'notify') return;
+
+        for (const msg of messages) {
+            if (!msg.message) continue;
+
+            // Extract text
+            const text = msg.message.conversation || msg.message.extendedTextMessage?.text;
+            if (!text) continue;
+
+            const remoteJid = msg.key.remoteJid;
+            if (remoteJid === 'status@broadcast') continue;
+
+            // AI Reply
+            if (settings.apiKey) {
+                try {
+                    const reply = await getAIReply(text);
+                    await sock.sendMessage(remoteJid, { text: reply });
+                    console.log(`Replied to ${remoteJid}`);
+                } catch (e) {
+                    console.error("AI Error:", e.message);
+                }
+            }
+        }
+    });
 }
 
-// --- 4. AI LOGIC ---
+// --- AI LOGIC ---
 async function getAIReply(text) {
-    try {
-        const genAI = new GoogleGenerativeAI(settings.apiKey);
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-        const result = await model.generateContent(`Act as a support agent for ${settings.businessName}. Context: ${settings.context}. User says: "${text}". Keep it brief.`);
-        return result.response.text();
-    } catch (e) {
-        return "I'm having trouble processing that request right now.";
-    }
+    const genAI = new GoogleGenerativeAI(settings.apiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+    const prompt = `
+    You are a helpful assistant for "${settings.businessName}".
+    Context: ${settings.context}
+    User: "${text}"
+    Reply concisely.
+    `;
+
+    const result = await model.generateContent(prompt);
+    return result.response.text();
 }
 
-// --- 5. SERVER STARTUP ---
+// --- SOCKET.IO ---
 io.on('connection', (socket) => {
-    console.log('Client connected.');
     socket.emit('status', lastStatus);
     if (lastQR) socket.emit('qr', lastQR);
 });
 
+// --- START ---
+// server.listen first, then start whatsapp
 server.listen(PORT, () => {
-    console.log(`Server Online on PORT ${PORT}`);
+    console.log(`Server v3.0 running on port ${PORT}`);
+
+    // NUCLEAR RESET ON START (As requested by user "sara del karo")
+    // We strictly delete the session folder on every cold boot of this specific version
+    // to ensure the user gets a fresh QR every time they deploy/restart.
+    if (fs.existsSync('auth_info_live')) {
+        console.log("Wiping old session (Fresh Start)...");
+        fs.rmSync('auth_info_live', { recursive: true, force: true });
+    }
+
     startWhatsApp();
 });
