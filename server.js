@@ -91,101 +91,77 @@ if (fs.existsSync('auth_info')) {
         console.error('Failed to clear auth_info (Permission Error?):', err.message);
     }
 }
-
-async function connectToWhatsApp() {
-    updateStatus('Initializing Baileys...');
-
-    // Use v3 session to ensure fresh start
-    console.log('Loading Auth Session v3...');
-    const { state, saveCreds } = await useMultiFileAuthState('auth_session_v3');
-    console.log('Auth Loaded Successfully.');
-    updateStatus('Auth Loaded. Creating Socket...');
-
-    sock = makeWASocket({
-        auth: state,
-        printQRInTerminal: false,
-        logger: pino({ level: 'info' }),
-        browser: ['Ubuntu', 'Chrome', '20.0.04'],
-        connectTimeoutMs: 60000,
-        syncFullHistory: false
-    });
-
-    sock.ev.on('connection.update', async (update) => {
-        const { connection, lastDisconnect, qr } = update;
-
-        if (qr) {
-            console.log('QR Code generated');
-            lastQR = qr;
-            io.emit('qr', qr);
-            updateStatus('QR Generated. Please Scan.');
-            // Also send as image data url for fallback
-            qrcode.toDataURL(qr, (err, url) => {
-                io.emit('qr_url', url);
-            });
+lastQR = qr;
+io.emit('qr', qr);
+updateStatus('QR Generated. Please Scan.');
+// Also send as image data url for fallback
+qrcode.toDataURL(qr, (err, url) => {
+    io.emit('qr_url', url);
+});
         }
 
-        if (connection === 'close') {
-            const shouldReconnect = (lastDisconnect.error)?.output?.statusCode !== DisconnectReason.loggedOut;
-            const errorReason = (lastDisconnect.error)?.output?.payload?.message || lastDisconnect.error?.message || "Unknown Error";
+if (connection === 'close') {
+    const shouldReconnect = (lastDisconnect.error)?.output?.statusCode !== DisconnectReason.loggedOut;
+    const errorReason = (lastDisconnect.error)?.output?.payload?.message || lastDisconnect.error?.message || "Unknown Error";
 
-            updateStatus(`Disconnected: ${errorReason}`);
+    updateStatus(`Disconnected: ${errorReason}`);
 
-            if (shouldReconnect) {
-                updateStatus(`Reconnecting in 5s due to: ${errorReason}`);
-                setTimeout(connectToWhatsApp, 5000);
+    if (shouldReconnect) {
+        updateStatus(`Reconnecting in 5s due to: ${errorReason}`);
+        setTimeout(connectToWhatsApp, 5000);
+    }
+} else if (connection === 'open') {
+    updateStatus('Connected ✅');
+    lastQR = ""; // Clear QR on connect
+    io.emit('qr', "");
+} else if (connection === 'connecting') {
+    updateStatus('Connecting to WhatsApp...');
+}
+    });
+
+sock.ev.on('creds.update', saveCreds);
+
+sock.ev.on('messages.upsert', async ({ messages, type }) => {
+    console.log(`Received Message Event: Type=${type}, Count=${messages.length}`);
+
+    for (const msg of messages) {
+        try {
+            if (type !== 'notify') continue;
+            if (msg.key.remoteJid === 'status@broadcast') return;
+
+            const msgContent = msg.message;
+            const userMsg = msgContent?.conversation ||
+                msgContent?.extendedTextMessage?.text ||
+                msgContent?.ephemeralMessage?.message?.extendedTextMessage?.text ||
+                msgContent?.ephemeralMessage?.message?.conversation;
+
+            if (!userMsg) {
+                console.log('Skipping: No text content found in message.');
+                continue;
             }
-        } else if (connection === 'open') {
-            updateStatus('Connected ✅');
-            lastQR = ""; // Clear QR on connect
-            io.emit('qr', "");
-        } else if (connection === 'connecting') {
-            updateStatus('Connecting to WhatsApp...');
-        }
-    });
 
-    sock.ev.on('creds.update', saveCreds);
+            const sender = msg.key.remoteJid;
+            console.log(`Msg from ${sender}: ${userMsg}`);
 
-    sock.ev.on('messages.upsert', async ({ messages, type }) => {
-        console.log(`Received Message Event: Type=${type}, Count=${messages.length}`);
+            if (settings.apiKey) {
+                console.log('Generating AI Reply...');
+                try {
+                    const reply = await getAIReply(userMsg);
+                    console.log('AI Reply Generated:', reply);
 
-        for (const msg of messages) {
-            try {
-                if (type !== 'notify') continue;
-                if (msg.key.remoteJid === 'status@broadcast') return;
-
-                const msgContent = msg.message;
-                const userMsg = msgContent?.conversation ||
-                    msgContent?.extendedTextMessage?.text ||
-                    msgContent?.ephemeralMessage?.message?.extendedTextMessage?.text ||
-                    msgContent?.ephemeralMessage?.message?.conversation;
-
-                if (!userMsg) {
-                    console.log('Skipping: No text content found in message.');
-                    continue;
+                    await sock.sendMessage(sender, { text: reply });
+                    console.log('Reply Sent!');
+                } catch (aiErr) {
+                    console.error('AI Processing Error:', aiErr);
                 }
-
-                const sender = msg.key.remoteJid;
-                console.log(`Msg from ${sender}: ${userMsg}`);
-
-                if (settings.apiKey) {
-                    console.log('Generating AI Reply...');
-                    try {
-                        const reply = await getAIReply(userMsg);
-                        console.log('AI Reply Generated:', reply);
-
-                        await sock.sendMessage(sender, { text: reply });
-                        console.log('Reply Sent!');
-                    } catch (aiErr) {
-                        console.error('AI Processing Error:', aiErr);
-                    }
-                } else {
-                    console.log('No API Key set. Skipping AI reply.');
-                }
-            } catch (err) {
-                console.error('Error in message loop:', err);
+            } else {
+                console.log('No API Key set. Skipping AI reply.');
             }
+        } catch (err) {
+            console.error('Error in message loop:', err);
         }
-    });
+    }
+});
 }
 
 async function getAIReply(userMsg) {
