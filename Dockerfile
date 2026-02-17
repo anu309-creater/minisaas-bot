@@ -16,7 +16,7 @@ RUN npm install --production
 COPY --chown=node:node . .
 
 # Create volume directories for persistence (optional but good practice)
-RUN mkdir -p auth_info auth_session_v3 && chown -R node:node /app
+RUN mkdir -p auth_info_live && chown -R node:node /app
 
 # Switch to non-root user for security
 USER node
