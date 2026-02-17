@@ -26,87 +26,31 @@ app.use(express.static('public'));
 app.use(express.json());
 
 // --- UTILS ---
-function updateStatus(msg) {
-    lastStatus = msg;
-    io.emit('status', msg);
-    console.log(`[STATUS] ${msg}`);
-}
+sock.ev.on('messages.upsert', async ({ messages, type }) => {
+    if (type !== 'notify') return;
 
-// --- API ROUTES ---
-app.post('/settings', (req, res) => {
-    const { businessName, apiKey, context } = req.body;
-    settings = { businessName, apiKey, context };
+    for (const msg of messages) {
+        if (!msg.message) continue;
 
-    // Simple file persistence
-    fs.writeFileSync('settings.json', JSON.stringify(settings));
+        // Extract text
+        const text = msg.message.conversation || msg.message.extendedTextMessage?.text;
+        if (!text) continue;
 
-    console.log(`Settings updated for ${businessName}`);
-    res.json({ message: 'Settings Saved. AI Ready.' });
+        const remoteJid = msg.key.remoteJid;
+        if (remoteJid === 'status@broadcast') continue;
+
+        // AI Reply
+        if (settings.apiKey) {
+            try {
+                const reply = await getAIReply(text);
+                await sock.sendMessage(remoteJid, { text: reply });
+                console.log(`Replied to ${remoteJid}`);
+            } catch (e) {
+                console.error("AI Error:", e.message);
+            }
+        }
+    }
 });
-
-// Load settings on start
-if (fs.existsSync('settings.json')) {
-    try {
-        const data = fs.readFileSync('settings.json', 'utf8');
-        if (qr) {
-            console.log("QR Code Generated");
-            lastQR = qr;
-            io.emit('qr', qr);
-            updateStatus("Scan QR Code");
-        }
-
-        if (connection === 'close') {
-            const shouldReconnect = (lastDisconnect.error)?.output?.statusCode !== DisconnectReason.loggedOut;
-            const reason = (lastDisconnect.error)?.output?.payload?.message || "Connection Closed";
-
-            updateStatus(`Disconnected: ${reason}`);
-
-            if (shouldReconnect) {
-                updateStatus("Reconnecting...");
-                setTimeout(startWhatsApp, 3000);
-            } else {
-                updateStatus("Session Logged Out. Delete 'auth_info_live' to reset.");
-                // Optional: Auto-delete on logout
-                try {
-                    fs.rmSync('auth_info_live', { recursive: true, force: true });
-                    startWhatsApp();
-                } catch (e) { console.error(e); }
-            }
-
-        } else if (connection === 'open') {
-            updateStatus("Connected ✅");
-            io.emit('qr', ""); // Clear QR
-            io.emit('log', "WhatsApp Connected!");
-        }
-    });
-
-    sock.ev.on('creds.update', saveCreds);
-
-    sock.ev.on('messages.upsert', async ({ messages, type }) => {
-        if (type !== 'notify') return;
-
-        for (const msg of messages) {
-            if (!msg.message) continue;
-
-            // Extract text
-            const text = msg.message.conversation || msg.message.extendedTextMessage?.text;
-            if (!text) continue;
-
-            const remoteJid = msg.key.remoteJid;
-            if (remoteJid === 'status@broadcast') continue;
-
-            // AI Reply
-            if (settings.apiKey) {
-                try {
-                    const reply = await getAIReply(text);
-                    await sock.sendMessage(remoteJid, { text: reply });
-                    console.log(`Replied to ${remoteJid}`);
-                } catch (e) {
-                    console.error("AI Error:", e.message);
-                }
-            }
-        }
-    });
 }
 
 // --- AI LOGIC ---
