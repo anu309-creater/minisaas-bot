@@ -32,6 +32,24 @@ app.post('/settings', (req, res) => {
     res.json({ message: 'Settings Saved' });
 });
 
+app.post('/reset-session', (req, res) => {
+    try {
+        console.log("[RESET] Clearing session...");
+        if (sock) {
+            sock.end(undefined);
+            sock = undefined;
+        }
+        if (fs.existsSync('auth_info_v4')) {
+            fs.rmSync('auth_info_v4', { recursive: true, force: true });
+        }
+        startWhatsApp();
+        res.json({ message: "Session Reset" });
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 app.post('/pair', async (req, res) => {
     const { phone } = req.body;
     console.log(`[PAIR] Request for ${phone}`);
@@ -74,7 +92,10 @@ async function startWhatsApp() {
     sock.ev.on('connection.update', (update) => {
         const { connection, lastDisconnect, qr } = update;
 
-        if (qr) io.emit('qr', qr);
+        if (qr) {
+            currentQR = qr;
+            io.emit('qr', qr);
+        }
 
         if (connection === 'close') {
             const shouldReconnect = (lastDisconnect.error)?.output?.statusCode !== DisconnectReason.loggedOut;
@@ -92,12 +113,13 @@ async function startWhatsApp() {
         } else if (connection === 'open') {
             io.emit('status', 'Connected ✅');
             io.emit('qr', ''); // Clear QR
+            currentQR = "";
         }
     });
 
     sock.ev.on('creds.update', saveCreds);
 
-    // AI Logic with Debug Logs
+    // AI Logic with Fallback and Debug Logs
     sock.ev.on('messages.upsert', async ({ messages, type }) => {
         if (type !== 'notify') return;
 
@@ -122,39 +144,72 @@ async function startWhatsApp() {
                 continue;
             }
 
-            try {
-                io.emit('log', '🤖 AI Thinking...');
-                const genAI = new GoogleGenerativeAI(settings.apiKey);
-                const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+            // AI Logic with Fallback
+            const modelsToTry = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"];
+            let aiResponse = null;
+            let lastError = null;
 
-                const prompt = `Act as a support agent for ${settings.businessName}. user: ${text}`;
-                const result = await model.generateContent(prompt);
-                const response = result.response.text();
+            for (const modelName of modelsToTry) {
+                try {
+                    io.emit('log', `🤖 Thinking with ${modelName}...`);
+                    const genAI = new GoogleGenerativeAI(settings.apiKey);
+                    const model = genAI.getGenerativeModel({ model: modelName });
 
-                await sock.sendMessage(remoteJid, { text: response });
-                io.emit('log', `✅ Sent: ${response.substring(0, 10)}...`);
+                    const prompt = `Act as a support agent for ${settings.businessName}. user: ${text}`;
+                    const result = await model.generateContent(prompt);
+                    aiResponse = result.response.text();
 
-            } catch (e) {
-                console.error('AI Error:', e.message);
-                io.emit('log', `❌ AI Error: ${e.message}`);
+                    // If successful, break loop
+                    if (aiResponse) break;
+
+                } catch (e) {
+                    console.error(`Error with ${modelName}:`, e.message);
+                    lastError = e.message;
+                    // Continue to next model
+                }
+            }
+
+            if (aiResponse) {
+                await sock.sendMessage(remoteJid, { text: aiResponse });
+                io.emit('log', `✅ Sent: ${aiResponse.substring(0, 10)}...`);
+            } else {
+                io.emit('log', `❌ All AI models failed. Last error: ${lastError}`);
+
+                // --- FALLBACK (OFFLINE MODE) ---
+                console.log("Switching to Basic Rule-Based Reply");
+                const lowerText = text.toLowerCase();
+                let reply = "";
+
+                if (lowerText.includes('hello') || lowerText.includes('hi') || lowerText.includes('salam')) {
+                    reply = "Walaikum Assalam! 👋\n(AI System is currently offline due to API Key issues, but I am here!)";
+                } else if (lowerText.includes('help')) {
+                    reply = "Since AI is down, I can only respond to basic commands.\nTry saying 'Hello'.";
+                } else {
+                    reply = "⚠️ AI Brain is disconnected (API Key Error).\n\nPlease update the API Key in settings.json to fix me.\n\nYou said: " + text;
+                }
+
+                await sock.sendMessage(remoteJid, { text: reply });
+                io.emit('log', `✅ Sent (Fallback): ${reply.substring(0, 10)}...`);
             }
         }
     });
 }
 
 // --- INIT ---
+let currentQR = ""; // Cache QR
+
 io.on('connection', (socket) => {
     socket.emit('log', 'Client Connected');
+    if (currentQR) socket.emit('qr', currentQR); // Send cached QR
+
     if (fs.existsSync('settings.json')) {
         try { settings = JSON.parse(fs.readFileSync('settings.json')); } catch (e) { }
     }
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
     console.log(`Server v4.3 running on ${PORT}`);
-    // Wipe on restart for fresh pairing
-    if (fs.existsSync('auth_info_v4')) {
-        try { fs.rmSync('auth_info_v4', { recursive: true, force: true }); } catch (e) { }
-    }
+    // Persistent Session: Do not wipe 'auth_info_v4' on restart
+    console.log("Persistent Session Enabled");
     startWhatsApp();
 });

@@ -12,7 +12,7 @@
             font-family: sans-serif;
             background: #f0f2f5;
             display: flex;
-            center;
+
             align-items: center;
             justify-content: center;
             height: 100vh;
@@ -100,18 +100,33 @@
         <div id="settings-view">
             <input type="text" id="businessName" placeholder="Business Name">
             <input type="password" id="apiKey" placeholder="Gemini API Key">
-            <button onclick="saveSettings()">Save & Continue</button>
+            <input type="text" id="context" placeholder="AI Persona/Context" value="I am a helpful assistant.">
+            <button id="btn-save-settings">Save & Continue</button>
+            <div id="saveStatus" style="color: green; font-size: 12px; margin-top: 5px;"></div>
         </div>
 
         <!-- Connection View -->
         <div id="connection-view" style="display: none;">
             <h3>Connect WhatsApp</h3>
 
-            <!-- Tab: Pairing Code (Only Option) -->
-            <div id="tab-pair">
+            <div style="display: flex; gap: 10px; justify-content: center; margin-bottom: 15px;">
+                <button id="btn-tab-qr" style="background: #eee; color: #333; font-size: 12px; padding: 8px;">Scan
+                    QR</button>
+                <button id="btn-tab-pair" style="background: #eee; color: #333; font-size: 12px; padding: 8px;">Pairing
+                    Code</button>
+            </div>
+
+            <!-- Tab: QR Code -->
+            <div id="tab-qr" style="display: block;">
+                <p style="font-size: 14px; color: #555;">Scan this QR code with WhatsApp</p>
+                <div id="qr-container"></div>
+            </div>
+
+            <!-- Tab: Pairing Code -->
+            <div id="tab-pair" style="display: none;">
                 <p style="font-size: 14px; color: #555;">Enter your WhatsApp number to get a Pairing Code.</p>
                 <input type="text" id="phone" placeholder="Phone (e.g. 923001234567)">
-                <button onclick="getPairingCode()">Get Pairing Code</button>
+                <button id="btn-get-code">Get Pairing Code</button>
                 <div id="pairing-code"
                     style="background: #e8f5e9; padding: 10px; margin-top: 15px; border-radius: 4px; display: none;">
                 </div>
@@ -119,78 +134,15 @@
                     Open WhatsApp > Linked Devices > <b>"Link with phone number instead"</b> > Enter this code.
                 </p>
             </div>
+
+            <div class="mode-switch" onclick="resetSession()">Reset Session / Logout</div>
+            <div id="resetMsg" style="font-size: 10px; color: red;"></div>
         </div>
 
         <div id="logs"></div>
     </div>
 
-    <script>
-        const socket = io();
-
-        // Status
-        socket.on('status', (msg) => {
-            document.getElementById('status').innerText = msg;
-            if (msg.includes("Connected")) {
-                document.getElementById('connection-view').innerHTML = "<h3>✅ Connected!</h3><p>Bot is active.</p>";
-            }
-        });
-
-        // Logs
-        socket.on('log', (msg) => {
-            const div = document.createElement('div');
-            div.innerText = `> ${msg}`;
-            document.getElementById('logs').prepend(div);
-        });
-
-        async function saveSettings() {
-            const businessName = document.getElementById('businessName').value;
-            const apiKey = document.getElementById('apiKey').value;
-            if (!businessName || !apiKey) return alert("Required!");
-
-            await fetch('/settings', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ businessName, apiKey })
-            });
-
-            document.getElementById('settings-view').style.display = 'none';
-            document.getElementById('connection-view').style.display = 'block';
-        }
-
-        async function getPairingCode() {
-            const phone = document.getElementById('phone').value;
-            if (!phone) return alert("Enter Phone Number");
-
-            // Show loading
-            const btn = document.querySelector('button[onclick="getPairingCode()"]');
-            const originalText = btn.innerText;
-            btn.innerText = "Generating...";
-            btn.disabled = true;
-
-            try {
-                const res = await fetch('/pair', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ phone })
-                });
-                const data = await res.json();
-
-                if (data.code) {
-                    const codeDiv = document.getElementById('pairing-code');
-                    codeDiv.innerText = data.code;
-                    codeDiv.style.display = 'block';
-                    document.getElementById('pair-instruction').style.display = 'block';
-                } else {
-                    alert(data.error || data.message);
-                }
-            } catch (e) {
-                alert("Error: " + e.message);
-            } finally {
-                btn.innerText = originalText;
-                btn.disabled = false;
-            }
-        }
-    </script>
+    <script src="client.js"></script>
 
 </body>
 

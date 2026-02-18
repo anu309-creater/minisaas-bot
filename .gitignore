@@ -1,5 +1,6 @@
 node_modules
 auth_info
+auth_info_v4
 settings.json
 .env
 npm-debug.log

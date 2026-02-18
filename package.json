@@ -6,8 +6,11 @@
   "scripts": {
     "start": "node server.js"
   },
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "dependencies": {
-    "@google/generative-ai": "^0.2.1",
+    "@google/generative-ai": "latest",
     "@whiskeysockets/baileys": "latest",
     "express": "^4.21.2",
     "pino": "^9.6.0",
