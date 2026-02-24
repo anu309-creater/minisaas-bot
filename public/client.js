@@ -35,16 +35,16 @@ function switchTab(mode) {
     if (mode === 'qr') {
         el.tabQr.style.display = 'block';
         el.tabPair.style.display = 'none';
-        el.btnTabQr.style.background = '#008069';
+        el.btnTabQr.style.background = 'linear-gradient(45deg, var(--primary), var(--secondary))';
         el.btnTabQr.style.color = 'white';
-        el.btnTabPair.style.background = '#eee';
-        el.btnTabPair.style.color = '#333';
+        el.btnTabPair.style.background = 'rgba(255, 255, 255, 0.05)';
+        el.btnTabPair.style.color = 'var(--text-muted)';
     } else {
         el.tabQr.style.display = 'none';
         el.tabPair.style.display = 'block';
-        el.btnTabQr.style.background = '#eee';
-        el.btnTabQr.style.color = '#333';
-        el.btnTabPair.style.background = '#008069';
+        el.btnTabQr.style.background = 'rgba(255, 255, 255, 0.05)';
+        el.btnTabQr.style.color = 'var(--text-muted)';
+        el.btnTabPair.style.background = 'linear-gradient(45deg, var(--primary), var(--secondary))';
         el.btnTabPair.style.color = 'white';
     }
 }
@@ -58,12 +58,20 @@ socket.on('connect', () => {
 });
 
 socket.on('status', (status) => {
-    el.status.innerText = status;
+    el.status.innerHTML = `<i class="fas fa-circle-notch fa-spin"></i> ${status}`;
     log(`Status: ${status}`);
 
     if (status.includes('Connected') || status === 'Connected ✅') {
-        el.qrContainer.innerHTML = '<h3>✅ Connected!</h3><p>Bot is active.</p>';
-        el.connectionView.innerHTML = "<h3>✅ Connected!</h3><p>Bot is active and ready to reply.</p><br><button onclick='resetSession()'>Logout</button>";
+        el.status.innerHTML = `<i class="fas fa-check-circle" style="color:#10b981"></i> ${status}`;
+        el.qrContainer.innerHTML = '<div style="font-size:3rem; margin-bottom:1rem;">✅</div><h3>Connected!</h3><p>Bot is active and thinking.</p>';
+        el.connectionView.innerHTML = `
+            <div style="text-align:center; padding: 2rem;">
+                <div style="font-size:4rem; margin-bottom:1.5rem;">🎉</div>
+                <h3 style="margin-bottom:1rem;">Successfully Connected!</h3>
+                <p style="color:var(--text-muted); margin-bottom:2rem;">Your AI Business Assistant is now live and waiting for messages.</p>
+                <button onclick='resetSession()' class="btn-secondary" style="width: auto; padding: 0.8rem 2rem;">Logout / Disconnect</button>
+            </div>
+        `;
     }
 });
 
@@ -82,7 +90,7 @@ socket.on('qr', (qrCode) => {
             colorLight: "#ffffff",
             correctLevel: QRCode.CorrectLevel.H
         });
-        el.status.innerText = "Scan QR Code quickly!";
+        el.status.innerHTML = '<i class="fas fa-qrcode"></i> Scan QR Code quickly!';
         if (el.tabPair.style.display !== 'block') {
             switchTab('qr'); // Auto switch if not in pair mode
         }
@@ -109,23 +117,33 @@ el.btnSave.addEventListener('click', async () => {
         return;
     }
 
+    const originalText = el.btnSave.innerText;
+    el.btnSave.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+    el.btnSave.disabled = true;
+
     try {
-        const res = await fetch('/settings', {
+        const res = await fetch('/api/settings', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ businessName, apiKey, context })
         });
 
         const data = await res.json();
-        el.saveStatus.innerText = data.message;
 
-        // Move to connection view
-        el.settingsView.style.display = 'none';
-        el.connectionView.style.display = 'block';
-        switchTab('qr'); // Default to QR
+        // Success animation
+        el.btnSave.innerHTML = '<i class="fas fa-check"></i> Saved!';
+
+        setTimeout(() => {
+            // Move to connection view
+            el.settingsView.style.display = 'none';
+            el.connectionView.style.display = 'block';
+            switchTab('qr'); // Default to QR
+        }, 800);
 
     } catch (e) {
         alert("Error saving: " + e.message);
+        el.btnSave.innerHTML = originalText;
+        el.btnSave.disabled = false;
     }
 });
 
@@ -135,7 +153,7 @@ el.btnGetCode.addEventListener('click', async () => {
     if (!phone) return alert("Enter Phone Number");
 
     const originalText = el.btnGetCode.innerText;
-    el.btnGetCode.innerText = "Generating...";
+    el.btnGetCode.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
     el.btnGetCode.disabled = true;
 
     try {
@@ -166,19 +184,10 @@ el.btnGetCode.addEventListener('click', async () => {
 window.resetSession = async function () {
     if (!confirm("Are you sure? This will delete all session data and restart the bot.")) return;
 
-    if (el.resetMsg) el.resetMsg.innerText = "Reseting...";
-
-    // Add endpoint to server.js if not exists, or just use rmSync logic via a trigger?
-    // Actually, server.js doesn't have a reset endpoint. I should add one.
-    // For now, let's assume the user manually restarts or we add the endpoint.
-
-    // START_TEMPORARY fix: Trigger a reset via a specific payload to settings or a new route?
-    // The previous client.js had /reset-session endpoint usage but it wasn't in server.js!
-    // I will add the route to server.js in the next step.
-
     try {
+        log("Sending reset request...");
         await fetch('/reset-session', { method: 'POST' });
-        alert("Session reset. Page will reload.");
+        alert("Session reset requested. The bot will restart and the page will reload.");
         location.reload();
     } catch (e) {
         alert("Error: " + e.message);

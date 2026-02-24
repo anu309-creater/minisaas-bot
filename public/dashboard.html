@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard | CodeXcel AI</title>
+    <link rel="stylesheet" href="landing.css">
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body {
+            background-color: var(--bg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 2rem;
+        }
+
+        .dashboard-container {
+            width: 100%;
+            max-width: 450px;
+        }
+
+        .card {
+            padding: 3rem 2rem;
+            text-align: center;
+        }
+
+        .dashboard-header {
+            margin-bottom: 2rem;
+        }
+
+        .dashboard-header h2 {
+            font-size: 1.8rem;
+            margin-bottom: 0.5rem;
+            font-family: 'Sora', sans-serif;
+            font-weight: 800;
+        }
+
+        #status {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            margin-bottom: 2rem;
+            display: inline-block;
+            padding: 0.4rem 1rem;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 100px;
+            border: 1px solid var(--glass-border);
+        }
+
+        input,
+        textarea,
+        button {
+            width: 100%;
+            padding: 1rem;
+            margin-top: 1rem;
+            border-radius: 12px;
+            border: 1px solid var(--glass-border);
+            font-size: 1rem;
+            transition: 0.3s;
+        }
+
+        input,
+        textarea {
+            background: rgba(255, 255, 255, 0.05);
+            color: #fff;
+        }
+
+        input:focus,
+        textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        #qr-container {
+            margin: 2rem auto;
+            width: 220px;
+            height: 220px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #fff;
+            padding: 10px;
+            border-radius: 16px;
+            box-shadow: 0 0 30px var(--primary-glow);
+        }
+
+        .tab-btn {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            padding: 0.7rem;
+            margin-top: 0;
+            cursor: pointer;
+            border: 1px solid var(--glass-border);
+        }
+
+        .tab-btn.active {
+            background: var(--primary);
+            color: #fff;
+            border-color: var(--primary);
+        }
+
+        #logs {
+            font-size: 0.75rem;
+            text-align: left;
+            max-height: 120px;
+            overflow-y: auto;
+            background: rgba(0, 0, 0, 0.4);
+            padding: 1rem;
+            margin-top: 2rem;
+            border-radius: 12px;
+            color: var(--text-muted);
+            border: 1px solid var(--glass-border);
+            line-height: 1.4;
+        }
+
+        .mode-switch {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            cursor: pointer;
+            text-decoration: none;
+            margin-top: 1.5rem;
+            display: block;
+            transition: 0.3s;
+        }
+
+        .mode-switch:hover {
+            color: var(--primary);
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Navigation -->
+    <nav class="glass-nav">
+        <div class="container">
+            <a href="index.html" class="logo"><i class="fas fa-terminal"></i>Code<span>Xcel</span></a>
+            <ul class="nav-links">
+                <li><a href="index.html#features">Features</a></li>
+                <li><a href="index.html#about">About</a></li>
+                <li><a href="index.html#pricing">Pricing</a></li>
+                <li><a href="index.html#faq">FAQ</a></li>
+                <li><a href="contact.html" class="btn-secondary-nav">Contact</a></li>
+                <li><a href="dashboard.html" class="active">Dashboard</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="dashboard-container" style="padding-top: 100px;">
+
+        <div class="glass-card card">
+            <div class="dashboard-header">
+                <h2>Code<span>Xcel</span> Setup</h2>
+                <div id="status">Initializing AI...</div>
+            </div>
+
+            <!-- Settings Form -->
+            <div id="settings-view">
+                <input type="text" id="businessName" placeholder="Business Name (e.g. CodeXcel)">
+                <input type="password" id="apiKey" placeholder="Gemini API Key">
+                <textarea id="context"
+                    placeholder="Business Details: What services do you provide? AI will use this to answer clients."
+                    rows="4"></textarea>
+                <button id="btn-save-settings" class="btn-primary">Save & Continue</button>
+                <div id="saveStatus" style="font-size: 12px; margin-top: 10px;"></div>
+            </div>
+
+            <!-- Connection View -->
+            <div id="connection-view" style="display: none;">
+                <h3 style="margin-bottom: 1.5rem;">Connect WhatsApp</h3>
+
+                <div style="display: flex; gap: 10px; margin-bottom: 1.5rem;">
+                    <button id="btn-tab-qr" class="tab-btn active">Scan QR</button>
+                    <button id="btn-tab-pair" class="tab-btn">Pairing Code</button>
+                </div>
+
+                <!-- Tab: QR Code -->
+                <div id="tab-qr" style="display: block;">
+                    <p style="font-size: 0.9rem; color: var(--text-muted);">Scan this code with your WhatsApp app.</p>
+                    <div id="qr-container"></div>
+                </div>
+
+                <!-- Tab: Pairing Code -->
+                <div id="tab-pair" style="display: none;">
+                    <p style="font-size: 0.9rem; color: var(--text-muted);">Enter your phone number (with country code).
+                    </p>
+                    <input type="text" id="phone" placeholder="e.g. 923001234567">
+                    <button id="btn-get-code" class="btn-primary">Get Code</button>
+                    <div id="pairing-code"
+                        style="background: rgba(99, 102, 241, 0.1); padding: 1.5rem; margin-top: 1.5rem; border-radius: 12px; display: none; font-size: 1.5rem; font-weight: 800; letter-spacing: 5px; color: var(--primary);">
+                    </div>
+                    <p id="pair-instruction"
+                        style="display:none; font-size: 0.8rem; color: var(--text-muted); margin-top: 1rem;">
+                        WhatsApp > Linked Devices > <b>"Link with phone number"</b>
+                    </p>
+                </div>
+
+                <a class="mode-switch" onclick="resetSession()">Reset Session / Logout</a>
+            </div>
+
+            <div id="logs"></div>
+        </div>
+    </div>
+
+    <script src="client.js"></script>
+</body>
+
+</html>

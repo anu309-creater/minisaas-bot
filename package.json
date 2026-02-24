@@ -10,7 +10,7 @@
     "node": ">=18.0.0"
   },
   "dependencies": {
-    "@google/generative-ai": "latest",
+    "@google/generative-ai": "^0.24.1",
     "@whiskeysockets/baileys": "latest",
     "express": "^4.21.2",
     "pino": "^9.6.0",

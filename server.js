@@ -1,10 +1,16 @@
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, delay, Browsers } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, Browsers } = require('@whiskeysockets/baileys');
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const fs = require('fs');
 const pino = require('pino');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+const path = require('path');
+
+/**
+ * MENTOR TIP: Structure your application into clear sections.
+ * This makes it easier to maintain and scale as your project grows.
+ */
 
 const app = express();
 const server = http.createServer(app);
@@ -12,81 +18,179 @@ const io = new Server(server);
 
 const PORT = process.env.PORT || 3000;
 
-// --- STATE ---
+// CRASH DETECTION (DEBUG)
+process.on('uncaughtException', (err) => {
+    console.error('!!!!!!!! UNCAUGHT EXCEPTION !!!!!!!!');
+    console.error(err.stack);
+    fs.appendFileSync('crash.log', `${new Date().toISOString()} - ${err.stack}\n`);
+    process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('!!!!!!!! UNHANDLED REJECTION !!!!!!!!');
+    console.error(reason);
+    fs.appendFileSync('crash.log', `${new Date().toISOString()} - REJECTION: ${reason}\n`);
+});
+
+// --- STATE MANAGEMENT ---
 let settings = {
     businessName: "My Business",
     apiKey: "",
     context: "I am a helpful assistant."
 };
 let sock;
+let currentQR = "";
+let connectionStatus = "Initializing...";
+
+// --- LOGGING ---
+const logsBuffer = [];
+const MAX_LOGS = 100;
+
+function addLog(message) {
+    const timestamp = new Date().toISOString();
+    const logEntry = `[${timestamp}] ${message}`;
+    logsBuffer.unshift(logEntry);
+    if (logsBuffer.length > MAX_LOGS) logsBuffer.pop();
+    io.emit('log', message);
+    console.log(logEntry);
+}
+
+// Load settings
+if (fs.existsSync('settings.json')) {
+    try {
+        const saved = JSON.parse(fs.readFileSync('settings.json'));
+        settings = { ...settings, ...saved };
+        addLog(`Loaded settings on startup: ${settings.businessName}`);
+    } catch (e) {
+        console.error("Failed to load settings.json:", e);
+    }
+}
 
 // --- MIDDLEWARE ---
 app.use(express.static('public'));
 app.use(express.json());
 
-// --- ROUTES ---
-app.post('/settings', (req, res) => {
-    settings = req.body;
-    fs.writeFileSync('settings.json', JSON.stringify(settings));
-    io.emit('log', `Settings Updated: ${settings.businessName}`);
-    res.json({ message: 'Settings Saved' });
+// --- API ROUTES ---
+app.get('/api/status', (req, res) => {
+    res.json({
+        status: connectionStatus,
+        businessName: settings.businessName,
+        botReady: !!(sock && sock.authState.creds.me)
+    });
 });
 
-app.post('/reset-session', (req, res) => {
+app.get('/api/logs', (req, res) => {
+    res.json({ logs: logsBuffer });
+});
+
+app.post('/api/settings', (req, res) => {
+    settings = { ...settings, ...req.body };
+    fs.writeFileSync('settings.json', JSON.stringify(settings));
+    addLog(`Settings Updated: ${settings.businessName}`);
+    res.json({ message: 'Settings Saved Successfully', settings });
+});
+
+app.post('/api/send', async (req, res) => {
+    const { phone, message } = req.body;
+    if (!phone || !message) return res.status(400).json({ error: 'Phone and message are required' });
+    if (!sock || !sock.authState.creds.me) return res.status(503).json({ error: 'WhatsApp bot is not connected' });
+
     try {
-        console.log("[RESET] Clearing session...");
-        if (sock) {
-            sock.end(undefined);
-            sock = undefined;
-        }
-        if (fs.existsSync('auth_info_v4')) {
-            fs.rmSync('auth_info_v4', { recursive: true, force: true });
-        }
-        startWhatsApp();
-        res.json({ message: "Session Reset" });
+        const jid = phone.includes('@') ? phone : `${phone}@s.whatsapp.net`;
+        await sock.sendMessage(jid, { text: message });
+        addLog(`API Sent Message: ${message.substring(0, 20)}...`);
+        res.json({ success: true });
     } catch (e) {
-        console.error(e);
+        addLog(`API Fail: ${e.message}`);
         res.status(500).json({ error: e.message });
     }
 });
 
 app.post('/pair', async (req, res) => {
     const { phone } = req.body;
-    console.log(`[PAIR] Request for ${phone}`);
-
-    if (!sock) {
-        console.log("[PAIR] System not ready (sock undefined)");
-        return res.status(503).json({ error: 'System Initializing... Wait 10s.' });
-    }
+    addLog(`Pairing request for ${phone}`);
+    if (!sock) return res.status(503).json({ error: 'System Initializing... Wait 10s.' });
 
     try {
         if (!sock.authState.creds.me) {
-            console.log("[PAIR] Requesting code from Baileys...");
             const code = await sock.requestPairingCode(phone);
-            console.log(`[PAIR] Code received: ${code}`);
-            io.emit('log', `Pairing Code Generated: ${code}`);
+            addLog(`Pairing Code Generated: ${code}`);
             res.json({ code });
         } else {
-            console.log("[PAIR] Already connected");
             res.json({ message: 'Already Connected' });
         }
     } catch (e) {
-        console.error("[PAIR] Error:", e);
-        res.status(500).json({ error: "Failed: " + e.message });
+        addLog(`Pairing Error: ${e.message}`);
+        res.status(500).json({ error: "Failed to generate pairing code: " + e.message });
     }
 });
 
-// --- CORE ---
+app.post('/api/contact', async (req, res) => {
+    const { name, email, message } = req.body;
+    if (!name || !email || !message) return res.status(400).json({ error: 'All fields are required' });
+
+    try {
+        const lead = {
+            id: Date.now(),
+            name,
+            email,
+            message,
+            timestamp: new Date().toISOString()
+        };
+
+        let leads = [];
+        if (fs.existsSync('leads.json')) {
+            leads = JSON.parse(fs.readFileSync('leads.json'));
+        }
+        leads.push(lead);
+        fs.writeFileSync('leads.json', JSON.stringify(leads, null, 2));
+
+        addLog(`📩 New Lead: ${name} (${email})`);
+        res.json({ success: true, message: 'Message received!' });
+    } catch (e) {
+        addLog(`Contact Error: ${e.message}`);
+        res.status(500).json({ error: 'Failed to save message' });
+    }
+});
+
+app.post('/reset-session', async (req, res) => {
+    try {
+        addLog("Clearing session...");
+        if (sock) {
+            sock.ev.removeAllListeners('connection.update');
+            sock.end(undefined);
+            sock = undefined;
+        }
+        if (fs.existsSync('auth_info_v4')) {
+            fs.rmSync('auth_info_v4', { recursive: true, force: true });
+        }
+        setTimeout(startWhatsApp, 2000);
+        res.json({ message: "Session Reset Started" });
+    } catch (e) {
+        addLog(`Reset Error: ${e.message}`);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Pages
+app.get('/dashboard', (req, res) => res.sendFile(path.join(__dirname, 'public', 'dashboard.html')));
+app.get('/contact', (req, res) => res.sendFile(path.join(__dirname, 'public', 'contact.html')));
+
+// --- WHATSAPP CORE ---
 async function startWhatsApp() {
-    // Ensure clean slate
     const { state, saveCreds } = await useMultiFileAuthState('auth_info_v4');
+    const { version } = await fetchLatestBaileysVersion();
+    addLog(`WA Version: ${version.join('.')}`);
 
     sock = makeWASocket({
+        version,
         auth: state,
         printQRInTerminal: false,
         logger: pino({ level: 'silent' }),
-        browser: ['Ubuntu', 'Chrome', '20.0.04'], // Standard Browser
+        browser: Browsers.macOS('Desktop'),
         connectTimeoutMs: 60000,
+        defaultQueryTimeoutMs: 60000,
+        keepAliveIntervalMs: 10000,
     });
 
     sock.ev.on('connection.update', (update) => {
@@ -95,121 +199,108 @@ async function startWhatsApp() {
         if (qr) {
             currentQR = qr;
             io.emit('qr', qr);
+            addLog("QR Code generated");
         }
 
         if (connection === 'close') {
-            const shouldReconnect = (lastDisconnect.error)?.output?.statusCode !== DisconnectReason.loggedOut;
-            io.emit('status', `Disconnected: ${lastDisconnect.error?.message}`);
+            const error = lastDisconnect?.error;
+            const statusCode = error?.output?.statusCode;
+            const reason = error?.message || 'Unknown reason';
+            const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+
+            console.error('--- DISCONNECT DETAILS ---', JSON.stringify(error, null, 2));
+            addLog(`Connection closed: ${reason}. Reconnecting: ${shouldReconnect}`);
+
+            connectionStatus = `Disconnected: ${reason}`;
+            io.emit('status', connectionStatus);
 
             if (shouldReconnect) {
-                setTimeout(startWhatsApp, 5000); // 5s Retry
+                setTimeout(startWhatsApp, 5000);
             } else {
-                // Logged out
-                try {
-                    fs.rmSync('auth_info_v4', { recursive: true, force: true });
-                    startWhatsApp();
-                } catch (e) { console.error(e); }
+                addLog("Logged out. Clearing auth folder...");
+                if (fs.existsSync('auth_info_v4')) fs.rmSync('auth_info_v4', { recursive: true, force: true });
+                startWhatsApp();
             }
         } else if (connection === 'open') {
-            io.emit('status', 'Connected ✅');
-            io.emit('qr', ''); // Clear QR
+            connectionStatus = 'Connected ✅';
+            io.emit('status', connectionStatus);
+            io.emit('qr', '');
             currentQR = "";
+            addLog("WhatsApp Connection Opened Successfully");
         }
     });
 
     sock.ev.on('creds.update', saveCreds);
 
-    // AI Logic with Fallback and Debug Logs
     sock.ev.on('messages.upsert', async ({ messages, type }) => {
         if (type !== 'notify') return;
 
         for (const msg of messages) {
-            if (!msg.message) continue;
+            if (!msg.message || msg.key.fromMe) continue;
 
             const remoteJid = msg.key.remoteJid;
-            const isMe = msg.key.fromMe;
             const text = msg.message.conversation || msg.message.extendedTextMessage?.text;
-
-            // Log every message receipt
-            if (text) {
-                io.emit('log', `Rx: ${text.substring(0, 10)}... (Me: ${isMe})`);
-            }
-
-            if (isMe) continue;
             if (!text) continue;
 
-            // Check Settings
+            addLog(`Rx: ${text.substring(0, 20)}...`);
+
             if (!settings.apiKey) {
-                io.emit('log', '⚠ No API Key set. Ignoring.');
+                addLog('⚠ No API Key. Skipping AI.');
                 continue;
             }
 
-            // AI Logic with Fallback
-            const modelsToTry = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"];
+            // AI Logic
+            const genAI = new GoogleGenerativeAI(settings.apiKey, { apiVersion: 'v1' });
+            // The year is 2026 - Stable models for this era:
+            const models = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash"];
             let aiResponse = null;
             let lastError = null;
 
-            for (const modelName of modelsToTry) {
+            for (const modelName of models) {
                 try {
-                    io.emit('log', `🤖 Thinking with ${modelName}...`);
-                    const genAI = new GoogleGenerativeAI(settings.apiKey);
-                    const model = genAI.getGenerativeModel({ model: modelName });
+                    addLog(`🤖 AI Thinking (${modelName})...`);
+                    const model = genAI.getGenerativeModel({
+                        model: modelName,
+                        systemInstruction: `You are the Customer Success Manager for "${settings.businessName}". \nContext: ${settings.context}`
+                    });
 
-                    const prompt = `Act as a support agent for ${settings.businessName}. user: ${text}`;
-                    const result = await model.generateContent(prompt);
+                    const result = await model.generateContent(text);
                     aiResponse = result.response.text();
-
-                    // If successful, break loop
-                    if (aiResponse) break;
-
+                    if (aiResponse) {
+                        addLog(`✅ AI Success with ${modelName}`);
+                        break;
+                    }
                 } catch (e) {
-                    console.error(`Error with ${modelName}:`, e.message);
                     lastError = e.message;
-                    // Continue to next model
+                    addLog(`❌ AI error (${modelName}): ${e.message}`);
+                    if (e.message.includes("API_KEY_INVALID")) break;
                 }
             }
 
             if (aiResponse) {
-                await sock.sendMessage(remoteJid, { text: aiResponse });
-                io.emit('log', `✅ Sent: ${aiResponse.substring(0, 10)}...`);
+                await sock.sendMessage(remoteJid, { text: aiResponse.trim() });
+                addLog(`✅ Sent AI Reply`);
             } else {
-                io.emit('log', `❌ All AI models failed. Last error: ${lastError}`);
-
-                // --- FALLBACK (OFFLINE MODE) ---
-                console.log("Switching to Basic Rule-Based Reply");
-                const lowerText = text.toLowerCase();
-                let reply = "";
-
-                if (lowerText.includes('hello') || lowerText.includes('hi') || lowerText.includes('salam')) {
-                    reply = "Walaikum Assalam! 👋\n(AI System is currently offline due to API Key issues, but I am here!)";
-                } else if (lowerText.includes('help')) {
-                    reply = "Since AI is down, I can only respond to basic commands.\nTry saying 'Hello'.";
-                } else {
-                    reply = "⚠️ AI Brain is disconnected (API Key Error).\n\nPlease update the API Key in settings.json to fix me.\n\nYou said: " + text;
-                }
-
-                await sock.sendMessage(remoteJid, { text: reply });
-                io.emit('log', `✅ Sent (Fallback): ${reply.substring(0, 10)}...`);
+                addLog(`❌ AI Failed. sending fallback.`);
+                const fallback = "I'm having a quick technical glitch with my AI brain. Let me get back to you shortly!";
+                await sock.sendMessage(remoteJid, { text: fallback });
             }
         }
     });
 }
 
-// --- INIT ---
-let currentQR = ""; // Cache QR
-
-io.on('connection', (socket) => {
-    socket.emit('log', 'Client Connected');
-    if (currentQR) socket.emit('qr', currentQR); // Send cached QR
-
-    if (fs.existsSync('settings.json')) {
-        try { settings = JSON.parse(fs.readFileSync('settings.json')); } catch (e) { }
+// Start Server
+server.listen(PORT, '0.0.0.0', () => {
+    addLog(`Server running on port ${PORT}`);
+    startWhatsApp();
+}).on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+        console.error(`Port ${PORT} in use. exiting.`);
+        process.exit(1);
     }
 });
 
-server.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server v4.3 running on ${PORT}`);
-    // Persistent Session: Do not wipe 'auth_info_v4' on restart
-    console.log("Persistent Session Enabled");
-    startWhatsApp();
+io.on('connection', (socket) => {
+    socket.emit('status', connectionStatus);
+    if (currentQR) socket.emit('qr', currentQR);
 });

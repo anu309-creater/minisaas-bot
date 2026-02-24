@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contact Us | CodeXcel Premium AI</title>
+    <link rel="stylesheet" href="landing.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Sora:wght@400;600;800&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .contact-page {
+            padding-top: 10rem;
+            padding-bottom: 6rem;
+            min-height: 100vh;
+        }
+
+        .contact-container {
+            max-width: 800px;
+        }
+
+        .contact-header {
+            text-align: center;
+            margin-bottom: 4rem;
+        }
+
+        .contact-header p {
+            color: var(--text-muted);
+            font-size: 1.1rem;
+            margin-top: 1rem;
+        }
+
+        .contact-form-card {
+            padding: 3rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            color: #fff;
+            transition: 0.3s;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .success-msg {
+            display: none;
+            background: rgba(34, 197, 94, 0.1);
+            color: #4ade80;
+            padding: 1rem;
+            border-radius: 12px;
+            margin-top: 2rem;
+            text-align: center;
+            border: 1px solid rgba(74, 222, 128, 0.2);
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Navigation -->
+    <nav class="glass-nav">
+        <div class="container">
+            <a href="index.html" class="logo"><i class="fas fa-terminal"></i>Code<span>Xcel</span></a>
+            <ul class="nav-links">
+                <li><a href="index.html#features">Features</a></li>
+                <li><a href="index.html#about">About</a></li>
+                <li><a href="index.html#pricing">Pricing</a></li>
+                <li><a href="index.html#faq">FAQ</a></li>
+                <li><a href="contact.html" class="btn-secondary-nav">Contact</a></li>
+                <li><a href="dashboard.html" class="btn-primary">Dashboard</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <main class="contact-page">
+        <div class="container contact-container">
+            <div class="contact-header">
+                <h1 class="section-title">Get in <span>Touch</span></h1>
+                <p>Have questions about CodeXcel? We're here to help you automate your business.</p>
+            </div>
+            <div class="glass-card contact-form-card">
+                <form id="contactForm">
+                    <div class="form-group">
+                        <label>Name</label>
+                        <input type="text" id="name" required placeholder="Your Name">
+                    </div>
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input type="email" id="email" required placeholder="your@email.com">
+                    </div>
+                    <div class="form-group">
+                        <label>Message</label>
+                        <textarea id="message" rows="5" required placeholder="How can we help you?"></textarea>
+                    </div>
+                    <button type="submit" class="btn-primary" style="width: 100%;">Send Message</button>
+                    <div id="successMsg" class="success-msg">
+                        <i class="fas fa-check-circle"></i> Message sent successfully! We'll get back to you soon.
+                    </div>
+                </form>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        document.getElementById('contactForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = e.target.querySelector('button');
+            const success = document.getElementById('successMsg');
+
+            btn.disabled = true;
+            btn.innerText = 'Sending...';
+
+            const data = {
+                name: document.getElementById('name').value,
+                email: document.getElementById('email').value,
+                message: document.getElementById('message').value
+            };
+
+            try {
+                const res = await fetch('/api/contact', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                if (res.ok) {
+                    success.style.display = 'block';
+                    e.target.reset();
+                } else {
+                    alert('Error sending message. Please try again.');
+                }
+            } catch (err) {
+                alert('Connection error. Please try again.');
+            } finally {
+                btn.disabled = false;
+                btn.innerText = 'Send Message';
+            }
+        });
+    </script>
+</body>
+
+</html>
