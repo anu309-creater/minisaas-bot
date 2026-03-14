@@ -6,6 +6,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard | CodeXcel AI</title>
     <link rel="stylesheet" href="landing.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Sora:wght@400;600;800&display=swap" rel="stylesheet">
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
@@ -140,14 +143,15 @@
     <!-- Navigation -->
     <nav class="glass-nav">
         <div class="container">
-            <a href="index.html" class="logo"><i class="fas fa-terminal"></i>Code<span>Xcel</span></a>
+            <a href="/" class="logo"><i class="fas fa-terminal"></i>Code<span>Xcel</span></a>
             <ul class="nav-links">
-                <li><a href="index.html#features">Features</a></li>
-                <li><a href="index.html#about">About</a></li>
-                <li><a href="index.html#pricing">Pricing</a></li>
-                <li><a href="index.html#faq">FAQ</a></li>
-                <li><a href="contact.html" class="btn-secondary-nav">Contact</a></li>
-                <li><a href="dashboard.html" class="active">Dashboard</a></li>
+                <li><a href="/#features">Features</a></li>
+                <li><a href="/#about">About</a></li>
+                <li><a href="/#pricing">Pricing</a></li>
+                <li><a href="/#faq">FAQ</a></li>
+                <li><a href="/contact" class="btn-secondary-nav">Contact</a></li>
+                <li><a href="/dashboard" class="active">Dashboard</a></li>
+                <li><a href="#" onclick="logoutDashboard()" class="btn-secondary-nav" style="background:#ef4444; color:white; border:none; margin-left:10px;">Logout</a></li>
             </ul>
         </div>
     </nav>
@@ -155,15 +159,22 @@
     <div class="dashboard-container" style="padding-top: 100px;">
 
         <div class="glass-card card">
-            <div class="dashboard-header">
-                <h2>Code<span>Xcel</span> Setup</h2>
-                <div id="status">Initializing AI...</div>
+            <div class="dashboard-header" style="display:flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <h2>Code<span>Xcel</span> Setup</h2>
+                    <div id="status">Initializing AI...</div>
+                </div>
+                <div style="text-align: right;">
+                    <div id="quotaBadge" style="background: rgba(99, 102, 241, 0.2); color: var(--primary); padding: 0.5rem 1rem; border-radius: 8px; font-weight: 600; font-size: 0.9rem; border: 1px solid var(--primary);">
+                        Loading Quota...
+                    </div>
+                </div>
             </div>
 
             <!-- Settings Form -->
             <div id="settings-view">
                 <input type="text" id="businessName" placeholder="Business Name (e.g. CodeXcel)">
-                <input type="password" id="apiKey" placeholder="Gemini API Key">
+                <input type="text" id="agentName" placeholder="Your Name (e.g. Zainab)">
                 <textarea id="context"
                     placeholder="Business Details: What services do you provide? AI will use this to answer clients."
                     rows="4"></textarea>

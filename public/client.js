@@ -1,4 +1,9 @@
-const socket = io();
+const token = localStorage.getItem('token');
+if (!token) {
+    window.location.href = '/login';
+}
+
+const socket = io({ query: { token } });
 
 // Elements
 const el = {
@@ -9,12 +14,11 @@ const el = {
     settingsView: document.getElementById('settings-view'),
     connectionView: document.getElementById('connection-view'),
     businessName: document.getElementById('businessName'),
-    apiKey: document.getElementById('apiKey'),
+    agentName: document.getElementById('agentName'),
     context: document.getElementById('context'),
     phone: document.getElementById('phone'),
     pairingCode: document.getElementById('pairing-code'),
     pairInstruction: document.getElementById('pair-instruction'),
-    resetMsg: document.getElementById('resetMsg'),
     tabQr: document.getElementById('tab-qr'),
     tabPair: document.getElementById('tab-pair'),
     btnTabQr: document.getElementById('btn-tab-qr'),
@@ -22,6 +26,61 @@ const el = {
     btnSave: document.getElementById('btn-save-settings'),
     btnGetCode: document.getElementById('btn-get-code')
 };
+
+// INITIAL LOAD
+async function loadUserData() {
+    try {
+        const res = await fetch('/api/auth/me', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.status === 401 || res.status === 403) {
+            localStorage.removeItem('token');
+            window.location.href = '/login';
+            return;
+        }
+        const data = await res.json();
+        
+        // Populate settings
+        el.businessName.value = data.user.businessName || '';
+        el.agentName.value = data.user.agentName || '';
+        el.context.value = data.user.context || '';
+        
+        // Quota Handling
+        const { chats_used, message_limit } = data.quota;
+        const planName = data.user.plan_id ? data.user.plan_id.toUpperCase() : 'FREE';
+        
+        const badge = document.getElementById('quotaBadge');
+        if (message_limit === -1) {
+            badge.innerHTML = `${planName} Plan 🌟 (Unlimited)`;
+            badge.style.background = 'rgba(16, 185, 129, 0.2)';
+            badge.style.borderColor = '#10b981';
+            badge.style.color = '#10b981';
+        } else {
+            if (chats_used >= message_limit) {
+                badge.style.background = 'rgba(239, 68, 68, 0.2)';
+                badge.style.borderColor = '#ef4444';
+                badge.style.color = '#ef4444';
+                badge.innerHTML = `Limit Reached (${chats_used}/${message_limit})`;
+            } else {
+                badge.innerHTML = `${planName} Chats: ${chats_used}/${message_limit}`;
+            }
+        }
+
+        // Check bot connection status
+        const statusRes = await fetch('/api/status', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const statusData = await statusRes.json();
+        if (statusData.botReady) {
+            el.settingsView.style.display = 'none';
+            el.connectionView.style.display = 'block';
+        }
+
+    } catch(e) {
+        console.error("Failed to load user data:", e);
+    }
+}
+loadUserData();
 
 // --- LOGGING ---
 function log(msg) {
@@ -69,7 +128,7 @@ socket.on('status', (status) => {
                 <div style="font-size:4rem; margin-bottom:1.5rem;">🎉</div>
                 <h3 style="margin-bottom:1rem;">Successfully Connected!</h3>
                 <p style="color:var(--text-muted); margin-bottom:2rem;">Your AI Business Assistant is now live and waiting for messages.</p>
-                <button onclick='resetSession()' class="btn-secondary" style="width: auto; padding: 0.8rem 2rem;">Logout / Disconnect</button>
+                <button onclick='resetSession()' class="btn-secondary" style="width: auto; padding: 0.8rem 2rem;">Logout WhatsApp Session</button>
             </div>
         `;
     }
@@ -91,7 +150,7 @@ socket.on('qr', (qrCode) => {
             correctLevel: QRCode.CorrectLevel.H
         });
         el.status.innerHTML = '<i class="fas fa-qrcode"></i> Scan QR Code quickly!';
-        if (el.tabPair.style.display !== 'block') {
+        if (el.tabPair?.style?.display !== 'block') {
             switchTab('qr'); // Auto switch if not in pair mode
         }
     } catch (e) {
@@ -109,11 +168,11 @@ socket.on('log', (message) => {
 // Save Settings
 el.btnSave.addEventListener('click', async () => {
     const businessName = el.businessName.value;
-    const apiKey = el.apiKey.value;
+    const agentName = el.agentName.value;
     const context = el.context.value;
 
-    if (!businessName || !apiKey) {
-        alert('Please fill Business Name and API Key');
+    if (!businessName) {
+        alert('Please fill Business Name');
         return;
     }
 
@@ -124,8 +183,11 @@ el.btnSave.addEventListener('click', async () => {
     try {
         const res = await fetch('/api/settings', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ businessName, apiKey, context })
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ businessName, agentName, context })
         });
 
         const data = await res.json();
@@ -147,6 +209,7 @@ el.btnSave.addEventListener('click', async () => {
     }
 });
 
+
 // Get Pairing Code
 el.btnGetCode.addEventListener('click', async () => {
     const phone = el.phone.value;
@@ -159,7 +222,10 @@ el.btnGetCode.addEventListener('click', async () => {
     try {
         const res = await fetch('/pair', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
             body: JSON.stringify({ phone })
         });
         const data = await res.json();
@@ -170,7 +236,7 @@ el.btnGetCode.addEventListener('click', async () => {
             el.pairInstruction.style.display = 'block';
             log(`Pairing code generated: ${data.code}`);
         } else {
-            alert(data.error || data.message);
+            alert(data.error || data.message || "Initializing... try scanning QR instead.");
         }
     } catch (e) {
         alert("Error: " + e.message);
@@ -182,14 +248,22 @@ el.btnGetCode.addEventListener('click', async () => {
 
 // Reset Session
 window.resetSession = async function () {
-    if (!confirm("Are you sure? This will delete all session data and restart the bot.")) return;
+    if (!confirm("Are you sure? This will disconnect your WhatsApp.")) return;
 
     try {
         log("Sending reset request...");
-        await fetch('/reset-session', { method: 'POST' });
-        alert("Session reset requested. The bot will restart and the page will reload.");
+        await fetch('/reset-session', { 
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        alert("Session reset requested!");
         location.reload();
     } catch (e) {
         alert("Error: " + e.message);
     }
+}
+
+window.logoutDashboard = function() {
+    localStorage.removeItem('token');
+    window.location.href = '/login';
 }

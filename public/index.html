@@ -26,8 +26,8 @@
                 <li><a href="#about">About</a></li>
                 <li><a href="#pricing">Pricing</a></li>
                 <li><a href="#faq">FAQ</a></li>
-                <li><a href="contact.html" class="btn-secondary-nav">Contact</a></li>
-                <li><a href="dashboard.html" class="btn-primary">Dashboard</a></li>
+                <li><a href="/contact" class="btn-secondary-nav">Contact</a></li>
+                <li><a href="/dashboard" class="btn-primary">Dashboard</a></li>
             </ul>
         </div>
     </nav>
@@ -97,52 +97,125 @@
     <!-- Pricing Section -->
     <section id="pricing" class="pricing">
         <div class="container">
-            <h2 class="section-title">Simple <span>Pricing</span></h2>
+            <h2 class="section-title">Subscription <span>Packages</span></h2>
             <div class="pricing-grid">
                 <div class="glass-card pricing-card">
                     <div class="plan-header">
                         <h3>Starter</h3>
-                        <div class="price">$19<span>/mo</span></div>
+                        <div class="price">$5<span>/wk</span></div>
                     </div>
                     <ul class="plan-features">
-                        <li><i class="fas fa-check"></i> 500 AI Messages/mo</li>
-                        <li><i class="fas fa-check"></i> 1 WhatsApp Account</li>
-                        <li><i class="fas fa-check"></i> Basic Business Context</li>
+                        <li><i class="fas fa-bolt"></i> 100 AI Messages / Week</li>
+                        <li><i class="fas fa-check"></i> 1 WhatsApp Number</li>
+                        <li><i class="fas fa-check"></i> Basic AI Personas</li>
                         <li><i class="fas fa-check"></i> 24/7 Availability</li>
                     </ul>
-                    <a href="#" class="btn-secondary">Choose Starter</a>
+                    <a href="javascript:void(0)" onclick="openPaymentModal('starter', 5)" class="btn-secondary">Choose Starter</a>
                 </div>
                 <div class="glass-card pricing-card featured">
                     <div class="popular-tag">MOST POPULAR</div>
                     <div class="plan-header">
                         <h3>Business Pro</h3>
-                        <div class="price">$49<span>/mo</span></div>
+                        <div class="price">$19<span>/mo</span></div>
                     </div>
                     <ul class="plan-features">
-                        <li><i class="fas fa-check"></i> Unlimited AI Messages</li>
-                        <li><i class="fas fa-check"></i> 3 WhatsApp Accounts</li>
-                        <li><i class="fas fa-check"></i> Advanced Business Logic</li>
-                        <li><i class="fas fa-check"></i> Lead Capture Export</li>
+                        <li><i class="fas fa-bolt"></i> 1,000 AI Messages / Month</li>
+                        <li><i class="fas fa-check"></i> Advanced AI Context</li>
+                        <li><i class="fas fa-check"></i> Smart Reminders</li>
+                        <li><i class="fas fa-check"></i> Lead Capture Logs</li>
                         <li><i class="fas fa-check"></i> Priority Support</li>
                     </ul>
-                    <a href="/dashboard" class="btn-primary">Get Started Pro</a>
+                    <a href="javascript:void(0)" onclick="openPaymentModal('pro', 19)" class="btn-primary">Get Started Pro</a>
                 </div>
                 <div class="glass-card pricing-card">
                     <div class="plan-header">
                         <h3>Enterprise</h3>
-                        <div class="price">Custom</div>
+                        <div class="price">$149<span>/yr</span></div>
                     </div>
                     <ul class="plan-features">
-                        <li><i class="fas fa-check"></i> Custom AI Training</li>
-                        <li><i class="fas fa-check"></i> Unlimited Accounts</li>
-                        <li><i class="fas fa-check"></i> Dedicated Manager</li>
-                        <li><i class="fas fa-check"></i> Custom Integrations</li>
+                        <li><i class="fas fa-infinity"></i> Unlimited AI Messages</li>
+                        <li><i class="fas fa-check"></i> Premium Custom AI Setup</li>
+                        <li><i class="fas fa-check"></i> Dedicated Account Manager</li>
+                        <li><i class="fas fa-check"></i> Free Onboarding Call</li>
+                        <li><i class="fas fa-check"></i> 100% Uptime SLA</li>
                     </ul>
-                    <a href="#" class="btn-secondary">Contact Us</a>
+                    <a href="javascript:void(0)" onclick="openPaymentModal('enterprise', 149)" class="btn-secondary">Get Enterprise</a>
                 </div>
             </div>
         </div>
     </section>
+
+    <!-- Payment Modal (click backdrop to close) -->
+    <div id="paymentModal" class="modal" style="display:none; position:fixed; z-index:1000; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.8); align-items:center; justify-content:center;" onclick="if(event.target===this) closePaymentModal()">
+        <div class="glass-card" style="width:400px; padding:2rem; position:relative;" onclick="event.stopPropagation()">
+            <span onclick="closePaymentModal()" style="position:absolute; right:20px; top:10px; cursor:pointer; font-size:1.5rem;">&times;</span>
+            <h3 style="margin-bottom:1.5rem;">Manual Payment (JazzCash)</h3>
+            <p style="margin-bottom:1rem; font-size:0.9rem;">To upgrade to <span id="modalPlanName" style="color:var(--primary); font-weight:600;">Plan</span>, please pay <b>$<span id="modalPrice">0</span></b> to:</p>
+            
+            <div style="background:rgba(255,255,255,0.05); padding:1rem; border-radius:12px; margin-bottom:1.5rem; text-align:left;">
+                <p><b>Acc Name:</b> MiniSaaS Demo</p>
+                <p><b>JazzCash:</b> 0300-1234567</p>
+            </div>
+            
+            <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:1.5rem;">After sending, click confirm for instant demo activation.</p>
+            <button id="confirmPaymentBtn" class="btn-primary" onclick="confirmManualPayment()">Confirm Payment Successfully Done</button>
+        </div>
+    </div>
+
+    <script>
+        let currentPlan = '';
+        
+        function openPaymentModal(plan, price) {
+            currentPlan = plan;
+            document.getElementById('modalPlanName').innerText = plan.toUpperCase();
+            document.getElementById('modalPrice').innerText = price;
+            document.getElementById('paymentModal').style.display = 'flex';
+        }
+        
+        function closePaymentModal() {
+            document.getElementById('paymentModal').style.display = 'none';
+        }
+
+        async function confirmManualPayment() {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                alert("Please login first!");
+                window.location.href = '/login';
+                return;
+            }
+            
+            const btn = document.getElementById('confirmPaymentBtn');
+            const originalText = btn.innerText;
+            btn.innerText = "Processing...";
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('/api/manual-upgrade', {
+                    method: 'POST',
+                    headers: { 
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ plan: currentPlan })
+                });
+                
+                const data = await res.json();
+                if (data.success) {
+                    alert("Mock payment confirmed! Plan upgraded successfully.");
+                    window.location.href = '/dashboard';
+                } else {
+                    alert(data.error || "Failed to upgrade");
+                    btn.innerText = originalText;
+                    btn.disabled = false;
+                }
+            } catch(e) {
+                alert("Network error: " + e.message);
+                btn.innerText = originalText;
+                btn.disabled = false;
+            }
+        }
+    </script>
+
 
     <!-- About Section -->
     <section id="about" class="about">

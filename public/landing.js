@@ -1,32 +1,25 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // Reveal animations on scroll
-    const observerOptions = {
-        threshold: 0.1
-    };
-
-    const observer = new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-            if (entry.isIntersecting) {
-                entry.target.classList.add('visible');
-            }
-        });
-    }, observerOptions);
-
-    document.querySelectorAll('.glass-card').forEach(card => {
-        card.style.opacity = '0';
-        card.style.transform = 'translateY(20px)';
-        card.style.transition = 'all 0.6s ease-out';
-        observer.observe(card);
-    });
-
-    // Handle scroll to add visible class
-    window.addEventListener('scroll', () => {
+    // Reveal helper
+    function revealVisible() {
         document.querySelectorAll('.glass-card').forEach(card => {
             const rect = card.getBoundingClientRect();
-            if (rect.top < window.innerHeight - 100) {
+            if (rect.top < window.innerHeight - 50) {
                 card.style.opacity = '1';
                 card.style.transform = 'translateY(0)';
             }
         });
+    }
+
+    // Set initial hidden state and track
+    document.querySelectorAll('.glass-card').forEach(card => {
+        card.style.opacity = '0';
+        card.style.transform = 'translateY(20px)';
+        card.style.transition = 'all 0.6s ease-out';
     });
+
+    // Reveal cards already in viewport on load (no scroll needed)
+    revealVisible();
+
+    // Continue revealing on scroll
+    window.addEventListener('scroll', revealVisible, { passive: true });
 });

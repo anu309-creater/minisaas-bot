@@ -90,6 +90,24 @@ body {
     text-shadow: 0 0 10px var(--primary-glow);
 }
 
+.btn-secondary-nav {
+    background: rgba(99, 102, 241, 0.1);
+    border: 1px solid rgba(99, 102, 241, 0.3);
+    color: var(--primary) !important;
+    padding: 0.45rem 1.1rem;
+    border-radius: 8px;
+    font-weight: 600;
+    transition: 0.3s;
+    font-size: 0.9rem;
+}
+
+.btn-secondary-nav:hover {
+    background: rgba(99, 102, 241, 0.25) !important;
+    border-color: var(--primary) !important;
+    transform: translateY(-2px);
+    text-shadow: none !important;
+}
+
 /* Hero Section */
 .hero {
     padding: 8rem 0 4rem;
@@ -357,6 +375,20 @@ h1 span {
     background: rgba(99, 102, 241, 0.05);
 }
 
+.popular-tag {
+    display: inline-block;
+    background: linear-gradient(45deg, var(--primary), var(--secondary));
+    color: #fff;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    padding: 0.35rem 1rem;
+    border-radius: 100px;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+}
+
 .price {
     font-size: 3rem;
     font-weight: 800;
@@ -488,6 +520,12 @@ footer {
 
 .glass-card:hover {
     border-color: rgba(99, 102, 241, 0.3);
+}
+
+/* Scroll reveal visible state */
+.glass-card.visible {
+    opacity: 1 !important;
+    transform: translateY(0) !important;
 }
 
 @media (max-width: 968px) {
