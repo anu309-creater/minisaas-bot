@@ -1,52 +1,45 @@
 require('dotenv').config();
-const mysql = require('mysql2/promise');
+const sqlite3 = require('sqlite3').verbose();
+const { open } = require('sqlite');
 const bcrypt = require('bcrypt');
+const path = require('path');
 
-// Create MySQL connection pool
-const pool = mysql.createPool({
-    host:     process.env.DB_HOST     || 'localhost',
-    user:     process.env.DB_USER     || 'root',
-    password: process.env.DB_PASSWORD || '',
-    database: process.env.DB_NAME     || 'minisaas',
-    waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0
-});
+const dbPath = path.join(__dirname, 'database.sqlite');
 
-// Initialize tables on startup
+let db;
+
+// Initialize database
 async function initDb() {
-    const conn = await pool.getConnection();
-    try {
-        await conn.query(`
-            CREATE TABLE IF NOT EXISTS users (
-                id            INT AUTO_INCREMENT PRIMARY KEY,
-                email         VARCHAR(255) NOT NULL UNIQUE,
-                password_hash TEXT NOT NULL,
-                businessName  VARCHAR(255) DEFAULT NULL,
-                agentName     VARCHAR(255) DEFAULT NULL,
-                apiKey        TEXT DEFAULT NULL,
-                context       TEXT DEFAULT NULL,
-                plan_id          VARCHAR(50) DEFAULT 'free',
-                is_paid          TINYINT(1) DEFAULT 0,
-                portfolio_config TEXT DEFAULT NULL,
-                created_at       DATETIME DEFAULT CURRENT_TIMESTAMP
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-        `);
+    db = await open({
+        filename: dbPath,
+        driver: sqlite3.Database
+    });
 
-        await conn.query(`
-            CREATE TABLE IF NOT EXISTS quotas (
-                user_id       INT NOT NULL PRIMARY KEY,
-                chats_used    INT DEFAULT 0,
-                message_limit INT DEFAULT 10,
-                reset_date    DATETIME DEFAULT NULL,
-                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-        `);
+    await db.exec(`
+        CREATE TABLE IF NOT EXISTS users (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            email         TEXT NOT NULL UNIQUE,
+            password_hash TEXT NOT NULL,
+            businessName  TEXT DEFAULT NULL,
+            agentName     TEXT DEFAULT NULL,
+            apiKey        TEXT DEFAULT NULL,
+            context       TEXT DEFAULT NULL,
+            plan_id       TEXT DEFAULT 'free',
+            is_paid       INTEGER DEFAULT 0,
+            portfolio_config TEXT DEFAULT NULL,
+            created_at    DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
 
-        console.log('MySQL connected & tables ready.');
-    } finally {
-        conn.release();
-    }
+        CREATE TABLE IF NOT EXISTS quotas (
+            user_id       INTEGER NOT NULL PRIMARY KEY,
+            chats_used    INTEGER DEFAULT 0,
+            message_limit INTEGER DEFAULT 10,
+            reset_date    DATETIME DEFAULT NULL,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+    `);
+
+    console.log('SQLite connected & tables ready.');
 }
 
 initDb().catch(err => console.error('DB Init Error:', err.message));
@@ -57,12 +50,12 @@ const dbHelper = {
 
     createUser: async (email, password, businessName) => {
         const passwordHash = await bcrypt.hash(password, 10);
-        const [result] = await pool.query(
+        const result = await db.run(
             `INSERT INTO users (email, password_hash, businessName, context) VALUES (?, ?, ?, ?)`,
             [email, passwordHash, businessName, 'I am a helpful assistant.']
         );
-        const userId = result.insertId;
-        await pool.query(
+        const userId = result.lastID;
+        await db.run(
             `INSERT INTO quotas (user_id, chats_used) VALUES (?, 0)`,
             [userId]
         );
@@ -70,13 +63,11 @@ const dbHelper = {
     },
 
     getUserByEmail: async (email) => {
-        const [rows] = await pool.query(`SELECT * FROM users WHERE email = ?`, [email]);
-        return rows[0] || null;
+        return await db.get(`SELECT * FROM users WHERE email = ?`, [email]);
     },
 
     getUserById: async (id) => {
-        const [rows] = await pool.query(`SELECT * FROM users WHERE id = ?`, [id]);
-        return rows[0] || null;
+        return await db.get(`SELECT * FROM users WHERE id = ?`, [id]);
     },
 
     updateUserSettings: async (id, settings) => {
@@ -94,27 +85,26 @@ const dbHelper = {
         if (updates.length === 0) return;
 
         values.push(id);
-        await pool.query(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, values);
+        await db.run(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, values);
     },
 
     incrementQuota: async (userId) => {
-        await pool.query(
+        await db.run(
             `UPDATE quotas SET chats_used = chats_used + 1 WHERE user_id = ?`,
             [userId]
         );
     },
 
     getQuota: async (userId) => {
-        const [rows] = await pool.query(
+        const row = await db.get(
             `SELECT chats_used, message_limit, reset_date FROM quotas WHERE user_id = ?`,
             [userId]
         );
-        const row = rows[0];
         if (!row) return { chats_used: 0, message_limit: 10 };
 
         // Auto-reset if reset_date has passed
         if (row.reset_date && new Date(row.reset_date) < new Date()) {
-            await pool.query(
+            await db.run(
                 `UPDATE quotas SET chats_used = 0, reset_date = NULL WHERE user_id = ?`,
                 [userId]
             );
@@ -125,40 +115,37 @@ const dbHelper = {
     },
 
     upgradeUserPlan: async (userId, planId, messageLimit) => {
-        const conn = await pool.getConnection();
         try {
-            await conn.beginTransaction();
-            await conn.query(
+            await db.run('BEGIN TRANSACTION');
+            await db.run(
                 `UPDATE users SET plan_id = ?, is_paid = 1 WHERE id = ?`,
                 [planId, userId]
             );
-            await conn.query(
+            await db.run(
                 `UPDATE quotas SET message_limit = ? WHERE user_id = ?`,
                 [messageLimit, userId]
             );
-            await conn.commit();
+            await db.run('COMMIT');
             return true;
         } catch (err) {
-            await conn.rollback();
+            await db.run('ROLLBACK');
             throw err;
-        } finally {
-            conn.release();
         }
     },
 
     updatePortfolio: async (userId, config) => {
-        await pool.query(
+        await db.run(
             `UPDATE users SET portfolio_config = ? WHERE id = ?`,
             [JSON.stringify(config), userId]
         );
     },
 
     getPortfolio: async (userId) => {
-        const [rows] = await pool.query(
+        const row = await db.get(
             `SELECT portfolio_config FROM users WHERE id = ?`,
             [userId]
         );
-        return rows[0]?.portfolio_config ? JSON.parse(rows[0].portfolio_config) : { images: [], keyword: 'portfolio' };
+        return row?.portfolio_config ? JSON.parse(row.portfolio_config) : { images: [], keyword: 'portfolio' };
     }
 };
 

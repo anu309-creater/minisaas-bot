@@ -20,6 +20,16 @@ const io = new Server(server);
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || "super_secret_minisaas_key_2026";
 
+process.on("uncaughtException", (err) => {
+  console.error("CRITICAL: Uncaught Exception:", err);
+  fs.appendFileSync("crash.log", `[${new Date().toISOString()}] Uncaught Exception: ${err.stack}\n`);
+});
+
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("CRITICAL: Unhandled Rejection at:", promise, "reason:", reason);
+  fs.appendFileSync("crash.log", `[${new Date().toISOString()}] Unhandled Rejection: ${reason}\n`);
+});
+
 // --- STATE MANAGEMENT ---
 let activeSockets = {}; // { userId: sock }
 let startingSockets = {}; // { userId: promise }
@@ -346,9 +356,9 @@ async function startWhatsApp(userId) {
 // PAGE ROUTES
 // =========================
 app.get("/", (req, res) => res.sendFile(path.join(__dirname, "public", "index.html")));
-app.get("/dashboard", (req, res) => res.sendFile(path.join(__dirname, "public", "dashboard.html")));
-app.get("/login", (req, res) => res.sendFile(path.join(__dirname, "public", "login.html")));
-app.get("/signup", (req, res) => res.sendFile(path.join(__dirname, "public", "signup.html")));
+app.get("/dashboard/?", (req, res) => res.sendFile(path.join(__dirname, "public", "dashboard.html")));
+app.get("/login/?", (req, res) => res.sendFile(path.join(__dirname, "public", "login.html")));
+app.get("/signup/?", (req, res) => res.sendFile(path.join(__dirname, "public", "signup.html")));
 
 // =========================
 // SERVER START
