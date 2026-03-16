@@ -151,6 +151,7 @@
                 <li><a href="/#faq">FAQ</a></li>
                 <li><a href="/contact" class="btn-secondary-nav">Contact</a></li>
                 <li><a href="/dashboard" class="active">Dashboard</a></li>
+                <li><a href="#" id="nav-portfolio-link">Portfolio</a></li>
                 <li><a href="#" onclick="logoutDashboard()" class="btn-secondary-nav" style="background:#ef4444; color:white; border:none; margin-left:10px;">Logout</a></li>
             </ul>
         </div>
@@ -213,6 +214,33 @@
                 </div>
 
                 <a class="mode-switch" onclick="resetSession()">Reset Session / Logout</a>
+            </div>
+
+            <!-- Portfolio View -->
+            <div id="portfolio-view" style="display: none;">
+                <h3 style="margin-bottom: 1.5rem;">Business Portfolio</h3>
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.5rem;">
+                    Upload images that the bot will send when clients ask for "portfolio".
+                </p>
+                
+                <div style="margin-bottom: 1.5rem; text-align: left;">
+                    <label style="font-size: 0.8rem; color: var(--text-muted);">Trigger Keyword</label>
+                    <input type="text" id="portfolioKeyword" placeholder="e.g. portfolio, samples, work" style="margin-top: 0.5rem;">
+                    <button id="btn-save-portfolio-keyword" class="btn-secondary" style="margin-top: 0.5rem; padding: 0.6rem;">Update Keyword</button>
+                </div>
+
+                <div style="border: 2px dashed var(--glass-border); padding: 2rem; border-radius: 12px; margin-bottom: 1.5rem;">
+                    <input type="file" id="portfolioFile" style="display: none;" accept="image/*">
+                    <button onclick="document.getElementById('portfolioFile').click()" class="btn-primary" style="margin-top: 0; width: auto; padding: 0.8rem 1.5rem;">
+                        <i class="fas fa-upload"></i> Upload Image
+                    </button>
+                </div>
+
+                <div id="portfolio-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 1.5rem;">
+                    <!-- Images will be listed here -->
+                </div>
+                
+                <a class="mode-switch" id="back-to-settings">Back to Settings</a>
             </div>
 
             <div id="logs"></div>

@@ -9,6 +9,21 @@ const path = require('path');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 const dbHelper = require('./database');
+const multer = require('multer');
+
+// --- MULTER SETUP ---
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        const uploadDir = path.join(__dirname, 'public', 'uploads');
+        if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+        cb(null, uploadDir);
+    },
+    filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, uniqueSuffix + path.extname(file.originalname));
+    }
+});
+const upload = multer({ storage });
 
 const app = express();
 const server = http.createServer(app);
@@ -207,6 +222,65 @@ app.post('/reset-session', authenticateToken, async (req, res) => {
     }
 });
 
+// --- PORTFOLIO API ---
+app.get('/api/portfolio', authenticateToken, async (req, res) => {
+    try {
+        const config = await dbHelper.getPortfolio(req.user.id);
+        res.json(config);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/portfolio/upload', authenticateToken, upload.single('image'), async (req, res) => {
+    try {
+        if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+        
+        const config = await dbHelper.getPortfolio(req.user.id);
+        config.images.push({
+            id: Date.now().toString(),
+            filename: req.file.filename,
+            originalName: req.file.originalname
+        });
+        
+        await dbHelper.updatePortfolio(req.user.id, config);
+        res.json({ success: true, filename: req.file.filename, config });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/portfolio/settings', authenticateToken, async (req, res) => {
+    try {
+        const { keyword } = req.body;
+        const config = await dbHelper.getPortfolio(req.user.id);
+        config.keyword = keyword || 'portfolio';
+        await dbHelper.updatePortfolio(req.user.id, config);
+        res.json({ success: true, config });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.delete('/api/portfolio/:id', authenticateToken, async (req, res) => {
+    try {
+        const config = await dbHelper.getPortfolio(req.user.id);
+        const imgIndex = config.images.findIndex(img => img.id === req.params.id);
+        
+        if (imgIndex !== -1) {
+            const img = config.images[imgIndex];
+            const filePath = path.join(__dirname, 'public', 'uploads', img.filename);
+            if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+            
+            config.images.splice(imgIndex, 1);
+            await dbHelper.updatePortfolio(req.user.id, config);
+        }
+        res.json({ success: true, config });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // Admin / Public endpoints
 app.post('/api/contact', async (req, res) => {
     const { name, email, message } = req.body;
@@ -366,6 +440,24 @@ async function startWhatsApp(userId) {
             if (!text) continue;
 
             addLog(userId, `Rx: ${text.substring(0, 20)}...`);
+
+            // Check Portfolio Keyword
+            const portfolioConfig = await dbHelper.getPortfolio(userId);
+            if (text.toLowerCase().includes(portfolioConfig.keyword?.toLowerCase() || 'portfolio')) {
+                if (portfolioConfig.images && portfolioConfig.images.length > 0) {
+                    addLog(userId, `Sending portfolio (${portfolioConfig.images.length} images)`);
+                    for (const img of portfolioConfig.images) {
+                        const imgPath = path.join(__dirname, 'public', 'uploads', img.filename);
+                        if (fs.existsSync(imgPath)) {
+                            await sock.sendMessage(remoteJid, { 
+                                image: fs.readFileSync(imgPath),
+                                caption: `Portfolio Image: ${img.originalName}`
+                            });
+                        }
+                    }
+                    continue; // Skip AI if portfolio is sent
+                }
+            }
             
             // Check SaaS Quota
             let quota = await dbHelper.getQuota(userId);

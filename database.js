@@ -26,9 +26,10 @@ async function initDb() {
                 agentName     VARCHAR(255) DEFAULT NULL,
                 apiKey        TEXT DEFAULT NULL,
                 context       TEXT DEFAULT NULL,
-                plan_id       VARCHAR(50) DEFAULT 'free',
-                is_paid       TINYINT(1) DEFAULT 0,
-                created_at    DATETIME DEFAULT CURRENT_TIMESTAMP
+                plan_id          VARCHAR(50) DEFAULT 'free',
+                is_paid          TINYINT(1) DEFAULT 0,
+                portfolio_config TEXT DEFAULT NULL,
+                created_at       DATETIME DEFAULT CURRENT_TIMESTAMP
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         `);
 
@@ -143,6 +144,21 @@ const dbHelper = {
         } finally {
             conn.release();
         }
+    },
+
+    updatePortfolio: async (userId, config) => {
+        await pool.query(
+            `UPDATE users SET portfolio_config = ? WHERE id = ?`,
+            [JSON.stringify(config), userId]
+        );
+    },
+
+    getPortfolio: async (userId) => {
+        const [rows] = await pool.query(
+            `SELECT portfolio_config FROM users WHERE id = ?`,
+            [userId]
+        );
+        return rows[0]?.portfolio_config ? JSON.parse(rows[0].portfolio_config) : { images: [], keyword: 'portfolio' };
     }
 };
 
