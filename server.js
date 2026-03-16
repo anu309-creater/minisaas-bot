@@ -69,8 +69,7 @@ function addLog(userId, message) {
 }
 
 // --- MIDDLEWARE ---
-app.use(express.static('public'));
-app.use(express.static(__dirname)); // Fallback if files are uploaded to root
+app.use(express.static(path.join(__dirname, 'public'))); // Fallback if files are uploaded to root
 app.use(express.json());
 
 function authenticateToken(req, res, next) {
