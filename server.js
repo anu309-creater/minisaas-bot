@@ -355,10 +355,22 @@ async function startWhatsApp(userId) {
 // =========================
 // PAGE ROUTES
 // =========================
-app.get("/", (req, res) => res.sendFile(path.join(__dirname, "public", "index.html")));
-app.get("/dashboard/?", (req, res) => res.sendFile(path.join(__dirname, "public", "dashboard.html")));
-app.get("/login/?", (req, res) => res.sendFile(path.join(__dirname, "public", "login.html")));
-app.get("/signup/?", (req, res) => res.sendFile(path.join(__dirname, "public", "signup.html")));
+app.get("/", (req, res) => {
+  console.log("Serving index.html");
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+app.get("/dashboard/?", (req, res) => {
+  console.log("Serving dashboard.html");
+  res.sendFile(path.join(__dirname, "public", "dashboard.html"));
+});
+app.get("/login/?", (req, res) => {
+  console.log("Serving login.html");
+  res.sendFile(path.join(__dirname, "public", "login.html"));
+});
+app.get("/signup/?", (req, res) => {
+  console.log("Serving signup.html");
+  res.sendFile(path.join(__dirname, "public", "signup.html"));
+});
 
 // =========================
 // SERVER START
