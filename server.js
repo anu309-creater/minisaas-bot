@@ -321,11 +321,22 @@ app.post('/api/manual-upgrade', authenticateToken, async (req, res) => {
     }
 });
 
-// Pages
+// --- PAGES ROUTES ---
+
 app.get('/dashboard', (req, res) => {
-    const pPath = path.join(__dirname, 'public', 'dashboard.html');
-    if (fs.existsSync(pPath)) return res.sendFile(pPath);
-    res.sendFile(path.join(__dirname, 'dashboard.html'));
+    res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
+});
+
+app.get('/login', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
+
+app.get('/signup', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'signup.html'));
+});
+
+app.get('/contact', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'contact.html'));
 });
 
 app.get('/contact', (req, res) => {
@@ -571,17 +582,10 @@ return startingSockets[userId];
 
 // Start Server
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on port ${PORT}`);
-    // Optional: We could start DB users' sockets automatically on boot,
-    // but for large scale SaaS, we'd wait for user login/request.
-    // Let's just initialize them lazily via /api/status or /pair.
-}).on('error', (err) => {
-    if (err.code === 'EADDRINUSE') {
-        console.error(`Port ${PORT} in use. exiting.`);
-        process.exit(1);
-    }
+    console.log("🚀 MiniSaaS Server Started");
+    console.log("PORT:", PORT);
+    console.log("PUBLIC PATH:", path.join(__dirname, 'public'));
 });
-
 io.on('connection', (socket) => {
     const token = socket.handshake.query.token;
     if (token) {
