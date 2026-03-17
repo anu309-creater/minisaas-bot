@@ -375,8 +375,19 @@ app.get("/signup/?", (req, res) => {
 // =========================
 // SERVER START
 // =========================
-server.listen(PORT, "0.0.0.0", () => {
-  console.log(`🚀 Server on port ${PORT}`);
+app.post("/api/settings", authenticateToken, async (req, res) => {
+  try {
+    await dbHelper.updateUserSettings(req.user.id, req.body);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+dbHelper.initPromise.then(() => {
+  server.listen(PORT, "0.0.0.0", () => {
+    console.log(`🚀 Server on port ${PORT}`);
+  });
 });
 
 io.on("connection", (socket) => {

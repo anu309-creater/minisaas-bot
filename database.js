@@ -42,13 +42,17 @@ async function initDb() {
     console.log('SQLite connected & tables ready.');
 }
 
-initDb().catch(err => console.error('DB Init Error:', err.message));
+const initPromise = initDb().catch(err => {
+    console.error('DB Init Error:', err.message);
+    process.exit(1);
+});
 
 // ── Helper Functions ─────────────────────────────────────
 
 const dbHelper = {
-
+    initPromise,
     createUser: async (email, password, businessName) => {
+        await initPromise;
         const passwordHash = await bcrypt.hash(password, 10);
         const result = await db.run(
             `INSERT INTO users (email, password_hash, businessName, context) VALUES (?, ?, ?, ?)`,
@@ -63,14 +67,17 @@ const dbHelper = {
     },
 
     getUserByEmail: async (email) => {
+        await initPromise;
         return await db.get(`SELECT * FROM users WHERE email = ?`, [email]);
     },
 
     getUserById: async (id) => {
+        await initPromise;
         return await db.get(`SELECT * FROM users WHERE id = ?`, [id]);
     },
 
     updateUserSettings: async (id, settings) => {
+        await initPromise;
         const allowed = ['businessName', 'agentName', 'apiKey', 'context'];
         const updates = [];
         const values  = [];
@@ -89,6 +96,7 @@ const dbHelper = {
     },
 
     incrementQuota: async (userId) => {
+        await initPromise;
         await db.run(
             `UPDATE quotas SET chats_used = chats_used + 1 WHERE user_id = ?`,
             [userId]
@@ -96,6 +104,7 @@ const dbHelper = {
     },
 
     getQuota: async (userId) => {
+        await initPromise;
         const row = await db.get(
             `SELECT chats_used, message_limit, reset_date FROM quotas WHERE user_id = ?`,
             [userId]
@@ -115,6 +124,7 @@ const dbHelper = {
     },
 
     upgradeUserPlan: async (userId, planId, messageLimit) => {
+        await initPromise;
         try {
             await db.run('BEGIN TRANSACTION');
             await db.run(
@@ -134,6 +144,7 @@ const dbHelper = {
     },
 
     updatePortfolio: async (userId, config) => {
+        await initPromise;
         await db.run(
             `UPDATE users SET portfolio_config = ? WHERE id = ?`,
             [JSON.stringify(config), userId]
@@ -141,6 +152,7 @@ const dbHelper = {
     },
 
     getPortfolio: async (userId) => {
+        await initPromise;
         const row = await db.get(
             `SELECT portfolio_config FROM users WHERE id = ?`,
             [userId]
