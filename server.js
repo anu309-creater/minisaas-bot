@@ -351,14 +351,19 @@ async function startWhatsApp(userId) {
           }
 
           // AI REPLY
-          if (!process.env.OPENROUTER_API_KEY) continue;
+          if (!process.env.OPENROUTER_API_KEY) {
+            addLog(userId, "❌ AI Error: OPENROUTER_API_KEY is not set in environment.");
+            continue;
+          }
 
           // Enforce quota limit before sending AI reply
           const quota = await dbHelper.getQuota(userId);
           if (quota.message_limit !== -1 && quota.chats_used >= quota.message_limit) {
-            addLog(userId, `⚠️ Message limit reached (${quota.chats_used}/${quota.message_limit}). Upgrade plan.`);
+            addLog(userId, `⚠️ Limit reached (${quota.chats_used}/${quota.message_limit}). Upgrade plan.`);
             continue;
           }
+
+          addLog(userId, "🤖 Thinking...");
 
           try {
             // Sanitize context to prevent prompt injection
@@ -380,12 +385,23 @@ async function startWhatsApp(userId) {
               }),
             });
             const data = await response.json();
+            
+            if (data.error) {
+              addLog(userId, `❌ AI API Error: ${data.error.message || "Unknown error"}`);
+              console.error("AI API Error:", data.error);
+              continue;
+            }
+
             const aiTxt = data.choices?.[0]?.message?.content;
             if (aiTxt) {
               await sock.sendMessage(remoteJid, { text: aiTxt });
               await dbHelper.incrementQuota(userId);
+              addLog(userId, "✅ AI Replied");
+            } else {
+              addLog(userId, "❌ AI Error: Empty response from AI.");
             }
           } catch (e) {
+            addLog(userId, `❌ AI System Error: ${e.message}`);
             console.error("AI Error:", e);
           }
         }
