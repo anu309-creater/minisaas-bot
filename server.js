@@ -20,13 +20,9 @@ const io = new Server(server);
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET;
 
-if (!JWT_SECRET || JWT_SECRET === "super_secret_minisaas_key_2026") {
-  if (process.env.NODE_ENV === "production") {
-    console.error("CRITICAL: JWT_SECRET is not set or using default in production! Exiting...");
-    process.exit(1);
-  } else {
-    console.warn("WARNING: JWT_SECRET is not set or using default. This is insecure.");
-  }
+if (!JWT_SECRET) {
+  console.error("CRITICAL: JWT_SECRET is not set in environment variables! Exiting...");
+  process.exit(1);
 }
 
 process.on("uncaughtException", (err) => {
@@ -101,7 +97,15 @@ const storage = multer.diskStorage({
     cb(null, name);
   },
 });
-const upload = multer({ storage });
+const upload = multer({
+  storage,
+  fileFilter: (req, file, cb) => {
+    const allowed = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+    if (allowed.includes(file.mimetype)) cb(null, true);
+    else cb(new Error("Only image files (JPEG, PNG, GIF, WEBP) are allowed!"));
+  },
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
+});
 
 // =========================
 // AUTH MIDDLEWARE
@@ -124,10 +128,14 @@ app.post("/api/auth/register", rateLimitAuth, async (req, res) => {
   try {
     const { email, password, businessName } = req.body;
     if (!email || !password || !businessName) return res.status(400).json({ error: "Missing fields" });
+    if (password.length < 8) return res.status(400).json({ error: "Password must be at least 8 characters." });
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) return res.status(400).json({ error: "Invalid email address." });
     const userId = await dbHelper.createUser(email, password, businessName);
     const token = jwt.sign({ id: userId, email }, JWT_SECRET, { expiresIn: "7d" });
     res.json({ success: true, token, userId });
   } catch (err) {
+    if (err.message && err.message.includes("UNIQUE")) return res.status(400).json({ error: "Email already registered." });
     res.status(500).json({ error: err.message });
   }
 });
@@ -344,7 +352,19 @@ async function startWhatsApp(userId) {
 
           // AI REPLY
           if (!process.env.OPENROUTER_API_KEY) continue;
+
+          // Enforce quota limit before sending AI reply
+          const quota = await dbHelper.getQuota(userId);
+          if (quota.message_limit !== -1 && quota.chats_used >= quota.message_limit) {
+            addLog(userId, `⚠️ Message limit reached (${quota.chats_used}/${quota.message_limit}). Upgrade plan.`);
+            continue;
+          }
+
           try {
+            // Sanitize context to prevent prompt injection
+            const safeContext = (user.context || "I am a helpful assistant.").substring(0, 500).trim();
+            const safeBizName = (user.businessName || "this business").substring(0, 100).trim();
+
             const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
               method: "POST",
               headers: {
@@ -354,7 +374,7 @@ async function startWhatsApp(userId) {
               body: JSON.stringify({
                 model: "google/gemini-2.0-flash-lite:free",
                 messages: [
-                  { role: "system", content: `You are the AI assistant for ${user.businessName}. Context: ${user.context}` },
+                  { role: "system", content: `You are the AI assistant for ${safeBizName}. Context: ${safeContext}` },
                   { role: "user", content: text },
                 ],
               }),
