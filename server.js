@@ -282,6 +282,7 @@ async function startWhatsApp(userId) {
 
   startingSockets[userId] = (async () => {
     try {
+      addLog(userId, "🚀 Starting WhatsApp engine...");
       const folderPath = path.join(__dirname, `auth_info_v4/user_${userId}`);
       if (!fs.existsSync(path.join(__dirname, "auth_info_v4"))) fs.mkdirSync(path.join(__dirname, "auth_info_v4"));
       const { state, saveCreds } = await useMultiFileAuthState(folderPath);
@@ -289,7 +290,9 @@ async function startWhatsApp(userId) {
       try {
         const latest = await fetchLatestBaileysVersion();
         version = latest.version;
-      } catch (e) {}
+      } catch (e) {
+        addLog(userId, "⚠️ Could not fetch latest version, using fallback.");
+      }
 
       const sock = makeWASocket({
         version,
@@ -307,10 +310,12 @@ async function startWhatsApp(userId) {
         const { connection, lastDisconnect, qr } = update;
         if (qr) {
           currentQRs[userId] = qr;
+          addLog(userId, "✅ Received QR Code. Scan now!");
           io.to(`user_${userId}`).emit("qr", qr);
         }
         if (connection === "close") {
           const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
+          addLog(userId, `❌ Connection Closed: ${shouldReconnect ? "Reconnecting..." : "Logged Out"}`);
           delete activeSockets[userId];
           if (shouldReconnect) setTimeout(() => startWhatsApp(userId), 5000);
           connectionStatuses[userId] = "Disconnected";
@@ -318,7 +323,7 @@ async function startWhatsApp(userId) {
           connectionStatuses[userId] = "Connected ✅";
           currentQRs[userId] = "";
           io.to(`user_${userId}`).emit("status", "Connected ✅");
-          addLog(userId, "WhatsApp Connected");
+          addLog(userId, "✅ WhatsApp Connected & Ready!");
         }
       });
 
