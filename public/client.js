@@ -28,7 +28,7 @@ const el = {
     portfolioView: document.getElementById('portfolio-view'),
     navPortfolio: document.getElementById('nav-portfolio-link'),
     portfolioGrid: document.getElementById('portfolio-grid'),
-    portfolioFile: document.getElementById('portfolio-file'), // Note: fixed ID in HTML below or use element check
+    portfolioFile: document.getElementById('portfolioFile'), // Fixed ID mismatch
     portfolioKeyword: document.getElementById('portfolioKeyword'),
     btnSavePortfolioKeyword: document.getElementById('btn-save-portfolio-keyword'),
     backToSettings: document.getElementById('back-to-settings')
@@ -132,7 +132,9 @@ socket.on('status', (status) => {
     if (status.includes('Connected') || status === 'Connected ✅') {
         el.status.innerHTML = `<i class="fas fa-check-circle" style="color:#10b981"></i> ${status}`;
         el.qrContainer.innerHTML = '<div style="font-size:3rem; margin-bottom:1rem;">✅</div><h3>Connected!</h3><p>Bot is active and thinking.</p>';
-        el.connectionView.innerHTML = `
+        
+        // Use a safer update that doesn't wipe the whole view if not needed
+        const connectionSuccessHTML = `
             <div style="text-align:center; padding: 2rem;">
                 <div style="font-size:4rem; margin-bottom:1.5rem;">🎉</div>
                 <h3 style="margin-bottom:1rem;">Successfully Connected!</h3>
@@ -140,6 +142,9 @@ socket.on('status', (status) => {
                 <button onclick='resetSession()' class="btn-secondary" style="width: auto; padding: 0.8rem 2rem;">Logout WhatsApp Session</button>
             </div>
         `;
+        if (!el.connectionView.innerHTML.includes('Successfully Connected!')) {
+            el.connectionView.innerHTML = connectionSuccessHTML;
+        }
     }
 });
 

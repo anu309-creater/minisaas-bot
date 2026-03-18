@@ -18,7 +18,16 @@ const server = http.createServer(app);
 const io = new Server(server);
 
 const PORT = process.env.PORT || 3000;
-const JWT_SECRET = process.env.JWT_SECRET || "super_secret_minisaas_key_2026";
+const JWT_SECRET = process.env.JWT_SECRET;
+
+if (!JWT_SECRET || JWT_SECRET === "super_secret_minisaas_key_2026") {
+  if (process.env.NODE_ENV === "production") {
+    console.error("CRITICAL: JWT_SECRET is not set or using default in production! Exiting...");
+    process.exit(1);
+  } else {
+    console.warn("WARNING: JWT_SECRET is not set or using default. This is insecure.");
+  }
+}
 
 process.on("uncaughtException", (err) => {
   console.error("CRITICAL: Uncaught Exception:", err);
@@ -29,6 +38,27 @@ process.on("unhandledRejection", (reason, promise) => {
   console.error("CRITICAL: Unhandled Rejection at:", promise, "reason:", reason);
   fs.appendFileSync("crash.log", `[${new Date().toISOString()}] Unhandled Rejection: ${reason}\n`);
 });
+
+// Simple Rate Limiter for Auth
+const loginAttempts = new Map();
+function rateLimitAuth(req, res, next) {
+  const ip = req.ip;
+  const now = Date.now();
+  const limit = 5; // 5 attempts
+  const window = 60000; // 1 minute
+
+  if (!loginAttempts.has(ip)) {
+    loginAttempts.set(ip, []);
+  }
+  const attempts = loginAttempts.get(ip).filter(t => now - t < window);
+  attempts.push(now);
+  loginAttempts.set(ip, attempts);
+
+  if (attempts.length > limit) {
+    return res.status(429).json({ error: "Too many attempts. Try again in a minute." });
+  }
+  next();
+}
 
 // --- STATE MANAGEMENT ---
 let activeSockets = {}; // { userId: sock }
@@ -90,7 +120,7 @@ function authenticateToken(req, res, next) {
 // =========================
 // AUTH ROUTES
 // =========================
-app.post("/api/auth/register", async (req, res) => {
+app.post("/api/auth/register", rateLimitAuth, async (req, res) => {
   try {
     const { email, password, businessName } = req.body;
     if (!email || !password || !businessName) return res.status(400).json({ error: "Missing fields" });
@@ -102,7 +132,7 @@ app.post("/api/auth/register", async (req, res) => {
   }
 });
 
-app.post("/api/auth/login", async (req, res) => {
+app.post("/api/auth/login", rateLimitAuth, async (req, res) => {
   try {
     const { email, password } = req.body;
     const user = await dbHelper.getUserByEmail(email);
@@ -387,6 +417,11 @@ app.post("/api/settings", authenticateToken, async (req, res) => {
 dbHelper.initPromise.then(() => {
   server.listen(PORT, "0.0.0.0", () => {
     console.log(`🚀 Server on port ${PORT}`);
+  }).on("error", (err) => {
+    if (err.code === "EADDRINUSE") {
+      console.error(`Port ${PORT} is in use. Please kill the process using it or wait a few seconds.`);
+      process.exit(1);
+    }
   });
 });
 

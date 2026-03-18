@@ -124,7 +124,7 @@ const dbHelper = {
     initPromise,
     createUser: async (email, password, businessName) => {
         await initPromise;
-        const passwordHash = await bcrypt.hash(password, 10);
+        const passwordHash = await bcrypt.hash(password, 12);
         const result = await runQuery(
             `INSERT INTO users (email, password_hash, businessName, context) VALUES (?, ?, ?, ?)`,
             [email, passwordHash, businessName, 'I am a helpful assistant.']
