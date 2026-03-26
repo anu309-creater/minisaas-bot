@@ -76,11 +76,8 @@ async function loadUserData() {
         const statusRes = await fetch('/api/status', {
             headers: { 'Authorization': `Bearer ${token}` }
         });
-        const statusData = await statusRes.json();
-        if (statusData.botReady) {
-            el.settingsView.style.display = 'none';
-            el.connectionView.style.display = 'block';
-        }
+        // DO NOT auto-switch the view. Always let the user see and review their Business Details first.
+        // The bot connection will still run in the background.
 
     } catch(e) {
         console.error("Dashboard Error:", e);
