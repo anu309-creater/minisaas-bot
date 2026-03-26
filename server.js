@@ -384,9 +384,14 @@ async function startWhatsApp(userId) {
 
             const freeModels = [
               "meta-llama/llama-3.3-70b-instruct:free",
+              "google/gemini-2.0-flash-exp:free",
               "qwen/qwen-2-7b-instruct:free",
               "cognitivecomputations/dolphin3.0-r1-mistral-24b:free",
-              "google/gemini-2.0-flash-exp:free"
+              "mistralai/mistral-7b-instruct:free",
+              "huggingfaceh4/zephyr-7b-beta:free",
+              "google/gemma-2-9b-it:free",
+              "meta-llama/llama-3.2-3b-instruct:free",
+              "openrouter/free" // Ultimate automatic fallback route
             ];
             
             let data = null;
