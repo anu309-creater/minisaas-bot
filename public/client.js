@@ -78,7 +78,7 @@ async function loadUserData() {
         });
         const statusData = await statusRes.json();
         if (statusData.botReady) {
-            // Always allow editing of settings
+            el.settingsView.style.display = 'none';
             el.connectionView.style.display = 'block';
         }
 
@@ -139,7 +139,9 @@ socket.on('status', (status) => {
                 <div style="font-size:4rem; margin-bottom:1.5rem;">🎉</div>
                 <h3 style="margin-bottom:1rem;">Successfully Connected!</h3>
                 <p style="color:var(--text-muted); margin-bottom:2rem;">Your AI Business Assistant is now live and waiting for messages.</p>
-                <button onclick='resetSession()' class="btn-secondary" style="width: auto; padding: 0.8rem 2rem;">Logout WhatsApp Session</button>
+                
+                <button onclick='editSettings()' class="btn-primary" style="width: auto; padding: 0.8rem 2rem; margin-right: 10px; margin-bottom: 10px;">Edit Business Info</button>
+                <button onclick='resetSession()' class="btn-secondary" style="width: auto; padding: 0.8rem 2rem; margin-bottom: 10px;">Logout WhatsApp</button>
             </div>
         `;
         if (!el.connectionView.innerHTML.includes('Successfully Connected!')) {
@@ -210,9 +212,11 @@ el.btnSave.addEventListener('click', async () => {
         el.btnSave.innerHTML = '<i class="fas fa-check"></i> Saved!';
 
         setTimeout(() => {
-            // Move to connection view but keep settings visible
+            el.settingsView.style.display = 'none';
             el.connectionView.style.display = 'block';
-            switchTab('qr'); // Default to QR
+            if (!el.connectionView.innerHTML.includes('Successfully Connected!')) {
+                switchTab('qr'); // Default to QR
+            }
         }, 800);
 
     } catch (e) {
@@ -272,7 +276,6 @@ el.navPortfolio.addEventListener('click', (e) => {
     e.preventDefault();
     el.settingsView.style.display = 'none';
     el.connectionView.style.display = 'none';
-    document.getElementById('divider-line').style.display = 'none';
     el.portfolioView.style.display = 'block';
     loadPortfolio();
 });
@@ -280,8 +283,7 @@ el.navPortfolio.addEventListener('click', (e) => {
 el.backToSettings.addEventListener('click', () => {
     el.portfolioView.style.display = 'none';
     el.settingsView.style.display = 'block';
-    el.connectionView.style.display = 'block';
-    document.getElementById('divider-line').style.display = 'block';
+    el.connectionView.style.display = 'none';
 });
 
 document.getElementById('portfolioFile').addEventListener('change', async (e) => {
@@ -377,6 +379,12 @@ window.resetSession = async function () {
     } catch (e) {
         alert("Error: " + e.message);
     }
+}
+
+window.editSettings = function() {
+    el.connectionView.style.display = 'none';
+    el.settingsView.style.display = 'block';
+    el.btnSave.innerHTML = "Save & Return";
 }
 
 window.logoutDashboard = function() {
