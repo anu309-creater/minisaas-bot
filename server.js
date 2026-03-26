@@ -21,7 +21,8 @@ const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET;
 
 if (!JWT_SECRET) {
-  console.error("CRITICAL: JWT_SECRET is not set in environment variables! Exiting...");
+  console.error("CRITICAL ERROR: JWT_SECRET is missing from .env file!");
+  console.error("Please add JWT_SECRET=your_random_secret_string to your .env file.");
   process.exit(1);
 }
 
@@ -283,15 +284,18 @@ async function startWhatsApp(userId) {
   startingSockets[userId] = (async () => {
     try {
       addLog(userId, "🚀 Starting WhatsApp engine...");
-      const folderPath = path.join(__dirname, `auth_info_v4/user_${userId}`);
-      if (!fs.existsSync(path.join(__dirname, "auth_info_v4"))) fs.mkdirSync(path.join(__dirname, "auth_info_v4"));
+      const authDir = path.join(__dirname, "auth_info_v4");
+      if (!fs.existsSync(authDir)) fs.mkdirSync(authDir, { recursive: true });
+      
+      const folderPath = path.join(authDir, `user_${userId}`);
       const { state, saveCreds } = await useMultiFileAuthState(folderPath);
-      let version = [2, 3000, 1015901307];
+      
+      let version = [2, 3000, 1017531207]; // Updated fallback
       try {
         const latest = await fetchLatestBaileysVersion();
         version = latest.version;
       } catch (e) {
-        addLog(userId, "⚠️ Could not fetch latest version, using fallback.");
+        addLog(userId, "⚠️ Could not fetch latest WhatsApp version, using fallback.");
       }
 
       const sock = makeWASocket({
@@ -335,43 +339,41 @@ async function startWhatsApp(userId) {
         if (!user) return;
 
         for (const msg of messages) {
-          if (!msg.message || msg.key.fromMe) continue;
-          const remoteJid = msg.key.remoteJid;
-          if (remoteJid.endsWith("@g.us")) continue;
-          const text = msg.message.conversation || msg.message.extendedTextMessage?.text;
-          if (!text) continue;
-
-          addLog(userId, `Msg: ${text.substring(0, 20)}`);
-
-          // PORTFOLIO CHECK
-          const portConfig = await dbHelper.getPortfolio(userId);
-          if (text.toLowerCase().includes(portConfig.keyword?.toLowerCase() || "portfolio")) {
-            for (const img of portConfig.images) {
-              const p = path.join(__dirname, "public", "uploads", img.filename);
-              if (fs.existsSync(p)) {
-                await sock.sendMessage(remoteJid, { image: fs.readFileSync(p), caption: "Portfolio Sample" });
-              }
-            }
-            continue;
-          }
-
-          // AI REPLY
-          if (!process.env.OPENROUTER_API_KEY) {
-            addLog(userId, "❌ AI Error: OPENROUTER_API_KEY is not set in environment.");
-            continue;
-          }
-
-          // Enforce quota limit before sending AI reply
-          const quota = await dbHelper.getQuota(userId);
-          if (quota.message_limit !== -1 && quota.chats_used >= quota.message_limit) {
-            addLog(userId, `⚠️ Limit reached (${quota.chats_used}/${quota.message_limit}). Upgrade plan.`);
-            continue;
-          }
-
-          addLog(userId, "🤖 Thinking...");
-
           try {
-            // Sanitize context to prevent prompt injection
+            if (!msg.message || msg.key.fromMe) continue;
+            const remoteJid = msg.key.remoteJid;
+            if (remoteJid.endsWith("@g.us")) continue;
+            const text = msg.message.conversation || msg.message.extendedTextMessage?.text;
+            if (!text) continue;
+
+            addLog(userId, `Msg: ${text.substring(0, 20)}`);
+
+            // PORTFOLIO CHECK
+            const portConfig = await dbHelper.getPortfolio(userId);
+            if (text.toLowerCase().includes(portConfig.keyword?.toLowerCase() || "portfolio")) {
+              for (const img of portConfig.images) {
+                const p = path.join(__dirname, "public", "uploads", img.filename);
+                if (fs.existsSync(p)) {
+                  await sock.sendMessage(remoteJid, { image: fs.readFileSync(p), caption: "Portfolio Sample" });
+                }
+              }
+              continue;
+            }
+
+            // AI REPLY
+            if (!process.env.OPENROUTER_API_KEY) {
+              addLog(userId, "❌ AI Error: OPENROUTER_API_KEY is missing from .env.");
+              continue;
+            }
+
+            const quota = await dbHelper.getQuota(userId);
+            if (quota.message_limit !== -1 && quota.chats_used >= quota.message_limit) {
+              addLog(userId, `⚠️ Limit reached (${quota.chats_used}/${quota.message_limit}). Upgrade plan.`);
+              continue;
+            }
+
+            addLog(userId, "🤖 Thinking...");
+
             const safeContext = (user.context || "I am a helpful assistant.").substring(0, 500).trim();
             const safeBizName = (user.businessName || "this business").substring(0, 100).trim();
 
@@ -382,7 +384,7 @@ async function startWhatsApp(userId) {
                 "Content-Type": "application/json",
               },
               body: JSON.stringify({
-                model: "google/gemini-2.0-flash-lite:free",
+                model: "google/gemini-2.0-flash-lite-preview-02-05:free",
                 messages: [
                   { role: "system", content: `You are the AI assistant for ${safeBizName}. Context: ${safeContext}` },
                   { role: "user", content: text },
@@ -393,7 +395,6 @@ async function startWhatsApp(userId) {
             
             if (data.error) {
               addLog(userId, `❌ AI API Error: ${data.error.message || "Unknown error"}`);
-              console.error("AI API Error:", data.error);
               continue;
             }
 
@@ -403,18 +404,17 @@ async function startWhatsApp(userId) {
               await dbHelper.incrementQuota(userId);
               addLog(userId, "✅ AI Replied");
             } else {
-              addLog(userId, "❌ AI Error: Empty response from AI.");
+              addLog(userId, "❌ AI Error: Empty response.");
             }
-          } catch (e) {
-            addLog(userId, `❌ AI System Error: ${e.message}`);
-            console.error("AI Error:", e);
+          } catch (innerErr) {
+            addLog(userId, `❌ Msg Processing Error: ${innerErr.message}`);
+            console.error("Message processing error:", innerErr);
           }
         }
       });
 
       return sock;
     } catch (err) {
-      delete startingSockets[userId];
       throw err;
     } finally {
       delete startingSockets[userId];
