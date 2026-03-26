@@ -382,24 +382,46 @@ async function startWhatsApp(userId) {
             const safeContext = (user.context || "I am a helpful assistant.").substring(0, 500).trim();
             const safeBizName = (user.businessName || "this business").substring(0, 100).trim();
 
-            const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-              method: "POST",
-              headers: {
-                Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                model: "meta-llama/llama-3.3-70b-instruct:free",
-                messages: [
-                  { role: "system", content: `You are the AI assistant for ${safeBizName}. Context: ${safeContext}` },
-                  { role: "user", content: text },
-                ],
-              }),
-            });
-            const data = await response.json();
+            const freeModels = [
+              "meta-llama/llama-3.3-70b-instruct:free",
+              "qwen/qwen-2-7b-instruct:free",
+              "cognitivecomputations/dolphin3.0-r1-mistral-24b:free",
+              "google/gemini-2.0-flash-exp:free"
+            ];
             
-            if (data.error) {
-              addLog(userId, `❌ AI API Error: ${data.error.message || "Unknown error"}`);
+            let data = null;
+            let success = false;
+            
+            for (const modelId of freeModels) {
+              try {
+                const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+                  method: "POST",
+                  headers: {
+                    Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify({
+                    model: modelId,
+                    messages: [
+                      { role: "system", content: `You are the AI assistant for ${safeBizName}. Context: ${safeContext}` },
+                      { role: "user", content: text },
+                    ],
+                  }),
+                });
+                
+                data = await response.json();
+                if (!data.error) {
+                  success = true;
+                  break; // Found a working model!
+                }
+                console.log(`Model ${modelId} failed:`, data.error.message);
+              } catch (e) {
+                console.log(`Fetch error for ${modelId}:`, e.message);
+              }
+            }
+
+            if (!success || !data) {
+              addLog(userId, `❌ AI API Error: All free models currently overloaded or failed.`);
               continue;
             }
 
