@@ -11,6 +11,9 @@ const isMySQL = process.env.DB_HOST && process.env.DB_USER && process.env.DB_NAM
 let db;
 let pool;
 
+/**
+ * Initializes the database (SQLite or MySQL).
+ */
 async function initDb() {
     if (isMySQL) {
         console.log('Connecting to MySQL...');
