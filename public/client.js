@@ -78,7 +78,7 @@ async function loadUserData() {
         });
         const statusData = await statusRes.json();
         if (statusData.botReady) {
-            el.settingsView.style.display = 'none';
+            // Always allow editing of settings
             el.connectionView.style.display = 'block';
         }
 
@@ -210,8 +210,7 @@ el.btnSave.addEventListener('click', async () => {
         el.btnSave.innerHTML = '<i class="fas fa-check"></i> Saved!';
 
         setTimeout(() => {
-            // Move to connection view
-            el.settingsView.style.display = 'none';
+            // Move to connection view but keep settings visible
             el.connectionView.style.display = 'block';
             switchTab('qr'); // Default to QR
         }, 800);
@@ -273,6 +272,7 @@ el.navPortfolio.addEventListener('click', (e) => {
     e.preventDefault();
     el.settingsView.style.display = 'none';
     el.connectionView.style.display = 'none';
+    document.getElementById('divider-line').style.display = 'none';
     el.portfolioView.style.display = 'block';
     loadPortfolio();
 });
@@ -280,6 +280,8 @@ el.navPortfolio.addEventListener('click', (e) => {
 el.backToSettings.addEventListener('click', () => {
     el.portfolioView.style.display = 'none';
     el.settingsView.style.display = 'block';
+    el.connectionView.style.display = 'block';
+    document.getElementById('divider-line').style.display = 'block';
 });
 
 document.getElementById('portfolioFile').addEventListener('change', async (e) => {
