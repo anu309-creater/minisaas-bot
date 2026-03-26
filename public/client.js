@@ -137,8 +137,10 @@ socket.on('status', (status) => {
                 <h3 style="margin-bottom:1rem;">Successfully Connected!</h3>
                 <p style="color:var(--text-muted); margin-bottom:2rem;">Your AI Business Assistant is now live and waiting for messages.</p>
                 
-                <button onclick='editSettings()' class="btn-primary" style="width: auto; padding: 0.8rem 2rem; margin-right: 10px; margin-bottom: 10px;">Edit Business Info</button>
-                <button onclick='resetSession()' class="btn-secondary" style="width: auto; padding: 0.8rem 2rem; margin-bottom: 10px;">Logout WhatsApp</button>
+                <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 1rem;">
+                    <button onclick='editSettings()' class="btn-primary" style="padding: 0.8rem 2rem;">Edit Business Info</button>
+                    <button onclick='resetSession()' class="btn-secondary" style="padding: 0.8rem 2rem;">Logout WhatsApp</button>
+                </div>
             </div>
         `;
         if (!el.connectionView.innerHTML.includes('Successfully Connected!')) {

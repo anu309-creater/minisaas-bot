@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard | CodeXcel AI</title>
-    <link rel="stylesheet" href="landing.css">
+    <link rel="stylesheet" href="landing.css?v=2">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Sora:wght@400;600;800&display=swap" rel="stylesheet">
@@ -144,7 +144,10 @@
     <nav class="glass-nav">
         <div class="container">
             <a href="/" class="logo"><i class="fas fa-terminal"></i>Code<span>Xcel</span></a>
-            <ul class="nav-links">
+            <div class="menu-toggle" onclick="toggleMenu()">
+                <i class="fas fa-bars"></i>
+            </div>
+            <ul class="nav-links" id="navLinks">
                 <li><a href="/#features">Features</a></li>
                 <li><a href="/#about">About</a></li>
                 <li><a href="/#pricing">Pricing</a></li>
@@ -247,6 +250,11 @@
         </div>
     </div>
 
+    <script>
+        function toggleMenu() {
+            document.getElementById('navLinks').classList.toggle('active');
+        }
+    </script>
     <script src="client.js"></script>
 </body>
 
