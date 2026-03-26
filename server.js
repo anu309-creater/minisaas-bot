@@ -419,7 +419,8 @@ CRITICAL RULES:
 1. ONLY offer services and packages explicitly mentioned above. NEVER invent prices, timelines, or services.
 2. If asked about something not listed, politely state you only handle the stated services.
 3. Be professional, concise, and helpful.
-4. If the user asks for examples of work, a portfolio, pictures, or past projects, instruct them to reply with the exact word "${portConfig.keyword || 'portfolio'}" to view the automated image gallery.`
+4. If the user asks for examples of work, a portfolio, pictures, or past projects, instruct them to reply with the exact word "${portConfig.keyword || 'portfolio'}" to view the automated image gallery.
+5. Format your messages cleanly for WhatsApp. Use *single asterisks* for bold text, and NEVER use Markdown headers (e.g., ###).`
                       },
                       { role: "user", content: text },
                     ],
@@ -442,8 +443,12 @@ CRITICAL RULES:
               continue;
             }
 
-            const aiTxt = data.choices?.[0]?.message?.content;
+            let aiTxt = data.choices?.[0]?.message?.content;
             if (aiTxt) {
+              // Clean Markdown for WhatsApp
+              aiTxt = aiTxt.replace(/\*\*(.*?)\*\*/g, '*$1*'); // **bold** to *bold*
+              aiTxt = aiTxt.replace(/^#+\s*/gm, ''); // Remove headers like ###
+              
               await sock.sendMessage(remoteJid, { text: aiTxt });
               await dbHelper.incrementQuota(userId);
               addLog(userId, "✅ AI Replied");
