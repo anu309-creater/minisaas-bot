@@ -477,7 +477,12 @@ io.on("connection", (socket) => {
     jwt.verify(token, JWT_SECRET, (err, user) => {
       if (!err) {
         socket.join(`user_${user.id}`);
-        startWhatsApp(user.id).catch(console.error);
+        const currentStatus = connectionStatuses[user.id] || "Not Initialized";
+        socket.emit("status", currentStatus);
+        
+        if (!activeSockets[user.id]) {
+            startWhatsApp(user.id).catch(console.error);
+        }
       }
     });
   }
