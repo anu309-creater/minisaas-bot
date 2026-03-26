@@ -321,6 +321,11 @@ async function startWhatsApp(userId) {
           const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
           addLog(userId, `❌ Connection Closed: ${shouldReconnect ? "Reconnecting..." : "Logged Out"}`);
           delete activeSockets[userId];
+          if (!shouldReconnect) {
+            const folderPath = path.join(__dirname, `auth_info_v4/user_${userId}`);
+            if (fs.existsSync(folderPath)) fs.rmSync(folderPath, { recursive: true, force: true });
+            addLog(userId, "🗑️ Session cleared. Click 'Reset Session' or refresh to generate a new QR.");
+          }
           if (shouldReconnect) setTimeout(() => startWhatsApp(userId), 5000);
           connectionStatuses[userId] = "Disconnected";
         } else if (connection === "open") {
