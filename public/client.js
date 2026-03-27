@@ -384,6 +384,7 @@ window.editSettings = function() {
     el.connectionView.style.display = 'none';
     el.settingsView.style.display = 'block';
     el.btnSave.innerHTML = "Save & Return";
+    el.btnSave.disabled = false;
 }
 
 window.logoutDashboard = function() {
